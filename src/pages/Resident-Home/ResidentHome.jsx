@@ -410,7 +410,8 @@ class ResidentHome extends React.Component {
     const selectedCenter =
       centers.find(
         (center) =>
-          center.position[0] === mapCenter[0] && center.position[1] === mapCenter[1],
+          center.position[0] === mapCenter[0] &&
+          center.position[1] === mapCenter[1],
       ) || centers[0];
     const lastUpdatedLabel = this.getLastUpdatedLabel();
 
@@ -520,7 +521,11 @@ class ResidentHome extends React.Component {
                   </button>
                   {isMarkedSafe && safeMarkedAt && (
                     <p className='text-xs font-semibold text-emerald-700 mt-2'>
-                      Status shared at {safeMarkedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      Status shared at{" "}
+                      {safeMarkedAt.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </p>
                   )}
                 </div>
@@ -555,9 +560,7 @@ class ResidentHome extends React.Component {
                   </p>
                   <p
                     className={`font-black text-red-700 ${
-                      highRiskCenters > 0
-                        ? "text-2xl"
-                        : "text-xl"
+                      highRiskCenters > 0 ? "text-2xl" : "text-xl"
                     }`}
                   >
                     {highRiskCenters}
@@ -595,7 +598,10 @@ class ResidentHome extends React.Component {
                     emergency guidance.
                   </p>
                   <p className='text-xs font-semibold text-slate-600 mt-2 inline-flex items-center gap-1'>
-                    <FontAwesomeIcon icon={faClock} className='text-slate-500' />
+                    <FontAwesomeIcon
+                      icon={faClock}
+                      className='text-slate-500'
+                    />
                     Last updated: {lastUpdatedLabel}
                   </p>
 
@@ -633,7 +639,9 @@ class ResidentHome extends React.Component {
                               <br />
                               {center.capacity}
                               <div className='text-[10px] font-black text-red-600'>
-                                {center.percent >= 90 ? "Near Capacity" : "Available"}
+                                {center.percent >= 90
+                                  ? "Near Capacity"
+                                  : "Available"}
                               </div>
                               <a
                                 href={this.getDirectionsUrl(center.position)}
@@ -641,7 +649,8 @@ class ResidentHome extends React.Component {
                                 rel='noreferrer'
                                 className='inline-flex items-center gap-1 text-[10px] text-blue-700 font-black'
                               >
-                                <FontAwesomeIcon icon={faRoute} /> Get Directions
+                                <FontAwesomeIcon icon={faRoute} /> Get
+                                Directions
                               </a>
                             </div>
                           </Popup>
@@ -729,7 +738,9 @@ class ResidentHome extends React.Component {
                             </p>
                           </div>
                           <a
-                            href={this.getDirectionsUrl(selectedCenter.position)}
+                            href={this.getDirectionsUrl(
+                              selectedCenter.position,
+                            )}
                             target='_blank'
                             rel='noreferrer'
                             className='inline-flex items-center gap-1 text-[10px] font-black text-blue-700 uppercase'

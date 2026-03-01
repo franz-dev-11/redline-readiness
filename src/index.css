@@ -26,6 +26,48 @@
   }
 }
 
+@keyframes profile-dropdown-expand {
+  0% {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-14px) scaleY(0.94);
+  }
+  70% {
+    max-height: 24rem;
+    opacity: 1;
+    transform: translateY(2px) scaleY(1.015);
+  }
+  to {
+    max-height: 24rem;
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+.profile-dropdown-expandable {
+  background: #fff;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-14px) scaleY(0.94);
+  line-height: 1.5;
+  transition: all 0.45s cubic-bezier(0.22, 1.05, 0.36, 1);
+  animation: profile-dropdown-expand 0.45s cubic-bezier(0.22, 1.05, 0.36, 1)
+    forwards;
+  will-change: max-height, opacity, transform;
+}
+
+.hamburger-menu-expandable {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-14px) scaleY(0.94);
+  transition: all 0.45s cubic-bezier(0.22, 1.05, 0.36, 1);
+  animation: profile-dropdown-expand 0.45s cubic-bezier(0.22, 1.05, 0.36, 1)
+    forwards;
+  will-change: max-height, opacity, transform;
+}
+
 .page-transition-shell > * > * {
   opacity: 0;
   transform: translateY(10px);
@@ -59,6 +101,22 @@
     transform: none;
     animation: none;
   }
+
+  .profile-dropdown-expandable {
+    animation: none;
+    transition: none;
+    max-height: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .hamburger-menu-expandable {
+    animation: none;
+    transition: none;
+    max-height: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .leaflet-tooltip.map-pin-label {
@@ -82,5 +140,12 @@
   font-size: 9px;
   padding: 3px 8px;
   background: rgba(30, 41, 59, 0.88);
+}
+
+.leaflet-tooltip.map-pin-label--full {
+  max-width: none;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
 }
 

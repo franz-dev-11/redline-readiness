@@ -5,6 +5,8 @@ import {
   faRightFromBracket,
   faUserShield,
   faUsers,
+  faBell,
+  faBullhorn,
   faChartLine,
   faCheckCircle,
   faClock,
@@ -16,8 +18,14 @@ import {
   faBan,
   faUserCheck,
 } from "@fortawesome/free-solid-svg-icons";
+import { doc, onSnapshot } from "firebase/firestore";
 import Header from "../../components/Header";
 import AuthService from "../../services/AuthService";
+import EmergencyEventService from "../../services/EmergencyEventService";
+import {
+  getAccessibilityContainerProps,
+  normalizeAccessibilitySettings,
+} from "../../services/AccessibilityViewUtils";
 
 /**
  * AdminDashboard - OOP Class-based Component
@@ -44,6 +52,13 @@ class AdminDashboard extends React.Component {
       activeView: "dashboard", // dashboard, users, analytics, settings
       searchTerm: "",
       filterRole: "all",
+      emergencyEvents: [],
+      emergencyFeedLoading: true,
+      accessibilitySettings: {
+        screenReader: false,
+        highContrast: false,
+        largeText: false,
+      },
     };
 
     this.pendingAccountsRef = React.createRef();
@@ -58,6 +73,11 @@ class AdminDashboard extends React.Component {
     this.handleSearch = this.handleSearch.bind(this);
     this.handleFilterChange = this.handleFilterChange.bind(this);
     this.filterUsers = this.filterUsers.bind(this);
+    this.startEmergencyFeedListener =
+      this.startEmergencyFeedListener.bind(this);
+    this.getEmergencyEventTimeLabel =
+      this.getEmergencyEventTimeLabel.bind(this);
+    this.startUserProfileListener = this.startUserProfileListener.bind(this);
   }
 
   /**
@@ -68,6 +88,8 @@ class AdminDashboard extends React.Component {
     const unsubscribe = AuthService.onAuthStateChange(async (user) => {
       if (user) {
         await this.loadDashboardData();
+        this.startEmergencyFeedListener();
+        this.startUserProfileListener(user.uid);
       }
     });
 
@@ -82,6 +104,63 @@ class AdminDashboard extends React.Component {
     if (this.authUnsubscribe) {
       this.authUnsubscribe();
     }
+    if (this.emergencyFeedUnsubscribe) {
+      this.emergencyFeedUnsubscribe();
+    }
+    if (this.userProfileUnsubscribe) {
+      this.userProfileUnsubscribe();
+    }
+  }
+
+  startUserProfileListener(userId) {
+    if (!userId) return;
+
+    if (this.userProfileUnsubscribe) {
+      this.userProfileUnsubscribe();
+    }
+
+    const userRef = doc(AuthService.db, "users", userId);
+    this.userProfileUnsubscribe = onSnapshot(userRef, (snapshot) => {
+      if (!snapshot.exists()) return;
+      const userData = snapshot.data();
+
+      this.setState({
+        accessibilitySettings: normalizeAccessibilitySettings(
+          userData?.accessibilitySettings,
+        ),
+      });
+    });
+  }
+
+  startEmergencyFeedListener() {
+    if (this.emergencyFeedUnsubscribe) {
+      this.emergencyFeedUnsubscribe();
+    }
+
+    this.emergencyFeedUnsubscribe =
+      EmergencyEventService.subscribeToRecentEvents((events) => {
+        this.setState({
+          emergencyEvents: events,
+          emergencyFeedLoading: false,
+        });
+      }, 10);
+  }
+
+  getEmergencyEventTimeLabel(event) {
+    const rawDate = event.createdAt?.toDate
+      ? event.createdAt.toDate()
+      : event.createdAt;
+
+    if (!(rawDate instanceof Date)) {
+      return "just now";
+    }
+
+    return rawDate.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
   }
 
   /**
@@ -347,8 +426,86 @@ class AdminDashboard extends React.Component {
    * @private
    */
   renderDashboard() {
-    const { stats, pendingAccounts, loading, error, processingAccountId } =
-      this.state;
+    const {
+      stats,
+      pendingAccounts,
+      loading,
+      error,
+      processingAccountId,
+      emergencyEvents,
+      emergencyFeedLoading,
+    } = this.state;
+    const recentFeedEvents = emergencyEvents.slice(0, 6);
+    const activeFeedEvents = recentFeedEvents.filter(
+      (event) =>
+        event.type !== "resolution" &&
+        event.status !== "stopped" &&
+        event.status !== "resolved",
+    );
+    const resolvedFeedEvents = recentFeedEvents.filter(
+      (event) =>
+        !activeFeedEvents.some((activeEvent) => activeEvent.id === event.id),
+    );
+
+    const renderFeedCard = (event) => {
+      const sourceTypeLabel =
+        event.sourceType === "sos"
+          ? "SOS"
+          : event.sourceType === "location-share"
+            ? "Location Share"
+            : "Alert";
+      const eventTypeLabel =
+        event.type === "sos"
+          ? "SOS Alert"
+          : event.type === "announcement"
+            ? "LGU Announcement"
+            : event.type === "resolution"
+              ? `Resolved: ${sourceTypeLabel}`
+              : event.status === "stopped"
+                ? "Location Share Stopped"
+                : "Location Share Active";
+
+      return (
+        <div
+          key={event.id}
+          className='rounded-lg border border-gray-200 bg-gray-50 p-3'
+        >
+          <p className='text-xs font-black uppercase text-[#3a4a5b] flex items-center gap-1'>
+            <FontAwesomeIcon
+              icon={
+                event.type === "sos"
+                  ? faShieldHeart
+                  : event.type === "resolution"
+                    ? faCheckCircle
+                    : faBullhorn
+              }
+              className={
+                event.type === "sos"
+                  ? "text-red-600"
+                  : event.type === "resolution"
+                    ? "text-green-600"
+                    : "text-blue-600"
+              }
+            />
+            {eventTypeLabel}
+          </p>
+          <p className='text-sm font-bold text-gray-700 mt-1'>
+            {event.userName || "Resident"}
+          </p>
+          <p className='text-xs text-gray-500 mt-0.5'>
+            {event.type === "resolution"
+              ? `${event.resolutionNote || "Resolved by resident"} (${sourceTypeLabel})`
+              : event.message ||
+                (event.durationMinutes
+                  ? `${event.durationMinutes}-minute temporary share`
+                  : "Emergency update")}
+          </p>
+          <p className='text-[11px] text-gray-400 mt-1'>
+            {this.getEmergencyEventTimeLabel(event)}
+          </p>
+        </div>
+      );
+    };
 
     return (
       <>
@@ -413,6 +570,55 @@ class AdminDashboard extends React.Component {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className='bg-white rounded-lg shadow-sm p-6 border border-gray-200 mb-6'>
+          <div className='flex items-center justify-between mb-4'>
+            <h2 className='text-lg font-black text-[#3a4a5b] flex items-center gap-2'>
+              <FontAwesomeIcon icon={faBell} className='text-blue-600' />
+              Emergency Event Feed
+            </h2>
+            <span className='text-xs font-bold text-gray-500 uppercase'>
+              SOS and location activity
+            </span>
+          </div>
+
+          {emergencyFeedLoading ? (
+            <div className='text-center py-6'>
+              <FontAwesomeIcon
+                icon={faSpinner}
+                spin
+                className='text-gray-400'
+                size='lg'
+              />
+            </div>
+          ) : recentFeedEvents.length === 0 ? (
+            <p className='text-sm text-gray-500'>No emergency events yet.</p>
+          ) : (
+            <div className='space-y-3'>
+              {activeFeedEvents.length > 0 && (
+                <>
+                  <p className='text-[10px] font-black text-red-600 uppercase tracking-wide'>
+                    Active
+                  </p>
+                  <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3'>
+                    {activeFeedEvents.map((event) => renderFeedCard(event))}
+                  </div>
+                </>
+              )}
+
+              {resolvedFeedEvents.length > 0 && (
+                <details className='border border-gray-200 rounded-lg bg-gray-50/50'>
+                  <summary className='px-3 py-2 text-[10px] font-black text-green-700 uppercase tracking-wide cursor-pointer'>
+                    Resolved ({resolvedFeedEvents.length})
+                  </summary>
+                  <div className='p-3 pt-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3'>
+                    {resolvedFeedEvents.map((event) => renderFeedCard(event))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Quick Actions */}
@@ -1036,10 +1242,17 @@ class AdminDashboard extends React.Component {
   }
 
   render() {
-    const { adminName, activeView } = this.state;
+    const { adminName, activeView, accessibilitySettings } = this.state;
+    const accessibilityContainer = getAccessibilityContainerProps(
+      accessibilitySettings,
+    );
 
     return (
-      <div className='min-h-screen bg-[#f3f4f6] font-sans'>
+      <div
+        className='min-h-screen bg-[#f3f4f6] font-sans'
+        style={accessibilityContainer.style}
+        aria-live={accessibilityContainer.ariaLive}
+      >
         {/* Header Component */}
         <Header sticky={true}>
           <div className='flex items-center gap-3'>

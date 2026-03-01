@@ -7,9 +7,9 @@ import GovernmentLogin from "./pages/Gov-Login/GovernmentLogin";
 import GovernmentRegister from "./pages/Gov-Login/GovernmentRegister";
 import ResidentRegister from "./pages/PWD-Login/ResidentRegister";
 import FamilyRegister from "./pages/PWD-Login/FamilyRegister";
-import ResidentHome from "./pages/Resident-Home/ResidentHome";
+import ResidentDashboard from "./pages/Resident-Home/ResidentDashboard";
 import AdminDashboard from "./pages/Admin/AdminDashboard";
-import GovernmentDashboard from "./pages/Gov-Dashboard/GovernmentDashboard";
+import GovernmentDashboard from "./pages/Gov-Home/GovernmentDashboard.jsx";
 import SetupProfile from "./pages/Profile/SetupProfile";
 import ViewProfile from "./pages/Profile/ViewProfile";
 import ViewManager from "./services/ViewManager";
@@ -155,7 +155,7 @@ class App extends React.Component {
       case "home":
         return this.renderWithTransition(
           "home",
-          <ResidentHome
+          <ResidentDashboard
             onLogout={() => ViewManager.goToSelection()}
             onOpenSetup={() => ViewManager.goToSetupProfile()}
             onViewProfile={() => ViewManager.goToViewProfile()}

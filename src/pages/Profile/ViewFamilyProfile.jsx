@@ -1,0 +1,240 @@
+import React from "react";
+import Header from "../../components/Header";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
+
+class ViewFamilyProfile extends React.Component {
+  formatDateValue(rawValue) {
+    if (!rawValue) {
+      return "—";
+    }
+
+    const parsedDate = new Date(rawValue);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return String(rawValue);
+    }
+
+    return parsedDate.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  renderMemberDob(member) {
+    const rawDob = member?.dateOfBirth || member?.birthDate || member?.dob;
+    return this.formatDateValue(rawDob);
+  }
+
+  render() {
+    const { profile, onBack } = this.props;
+
+    const family = profile?.familyProfile || {};
+    const personal = profile?.personalInfo || {};
+    const displayName =
+      family.householdName ||
+      family.householdHead ||
+      profile?.fullName ||
+      "Family Profile";
+    const photoUrl = personal.photoUrl || profile?.photoUrl || "";
+    const contactValue = family.contactNumber || profile?.phone || "—";
+    const addressValue = family.address || "—";
+    const householdMembers = Array.isArray(family?.householdMembers)
+      ? family.householdMembers
+      : [];
+
+    const disabilityLabelMap = {
+      visual: "Visual Disability",
+      hearing: "Hearing Disability",
+      intellectual: "Intellectual Disability",
+      physical: "Physical Disability",
+      psychological: "Psychological Disability",
+      rare: "Rare Disability",
+    };
+
+    return (
+      <div className='min-h-screen bg-[#f3f4f6]'>
+        <Header subtitle='View Family Profile' logoStyle='svg'></Header>
+
+        <div className='max-w-6xl mx-auto p-6'>
+          <button
+            type='button'
+            onClick={onBack}
+            className='mb-4 text-sm font-bold text-slate-600 hover:text-slate-900 flex items-center gap-2'
+          >
+            <FontAwesomeIcon icon={faArrowLeft} /> Back to Dashboard
+          </button>
+
+          <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
+            <div className='lg:col-span-8 bg-white border rounded p-6'>
+              <div className='flex items-center gap-4 mb-4'>
+                {photoUrl ? (
+                  <img
+                    src={photoUrl}
+                    alt='Profile'
+                    className='w-20 h-20 rounded-xl object-cover border border-gray-200'
+                  />
+                ) : (
+                  <div className='w-20 h-20 rounded-xl border border-gray-200 bg-blue-100 flex items-center justify-center text-2xl font-black text-blue-700'>
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <p className='text-sm font-bold text-slate-700'></p>
+                </div>
+              </div>
+
+              <h1 className='text-2xl font-black text-[#3a4a5b] mb-1'>
+                {displayName}
+              </h1>
+
+              <p className='text-xs text-slate-500 font-semibold mb-4'>
+                Family Account Profile
+              </p>
+
+              <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
+                <div>
+                  <p className='text-gray-500 text-xs font-bold'>
+                    Household Head
+                  </p>
+                  <p className='font-bold text-slate-700'>
+                    {family.householdHead || profile?.fullName || "—"}
+                  </p>
+                  <p className='text-xs text-slate-500 mt-1'>
+                    Date of Birth: {this.formatDateValue(
+                      family.householdHeadDateOfBirth || family.householdHeadDob,
+                    )}
+                  </p>
+                  <p className='text-xs text-slate-500 mt-1'>
+                    Disability:{" "}
+                    {disabilityLabelMap[family.householdHeadDisabilityType] ||
+                      family.householdHeadDisabilityType ||
+                      "None"}
+                  </p>
+                </div>
+                <div>
+                  <p className='text-gray-500 text-xs font-bold'>Contact</p>
+                  <p className='font-bold text-slate-700'>{contactValue}</p>
+                </div>
+                <div>
+                  <p className='text-gray-500 text-xs font-bold'>
+                    Total Members
+                  </p>
+                  <p className='font-bold text-slate-700'>
+                    {family.totalMembers ?? householdMembers.length ?? "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className='text-gray-500 text-xs font-bold'>
+                    Preferred Evac Center
+                  </p>
+                  <p className='font-bold text-slate-700'>
+                    {family.preferredEvacCenter || "—"}
+                  </p>
+                </div>
+                <div className='md:col-span-2'>
+                  <p className='text-gray-500 text-xs font-bold'>Address</p>
+                  <p className='font-bold text-slate-700'>{addressValue}</p>
+                </div>
+              </div>
+
+              <div className='mt-6 p-4 bg-slate-50 border border-slate-200 rounded'>
+                <p className='text-xs font-bold text-slate-700 mb-3'>
+                  Household Summary
+                </p>
+                <div className='grid grid-cols-2 md:grid-cols-3 gap-3 text-xs'>
+                  <div>
+                    <p className='text-slate-500 font-semibold'>PWD</p>
+                    <p className='text-slate-800 font-bold'>
+                      {family.pwdMembers ?? 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className='text-slate-500 font-semibold'>Elderly</p>
+                    <p className='text-slate-800 font-bold'>
+                      {family.elderlyMembers ?? 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className='text-slate-500 font-semibold'>Children</p>
+                    <p className='text-slate-800 font-bold'>
+                      {family.childMembers ?? 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className='text-slate-500 font-semibold'>Pregnant</p>
+                    <p className='text-slate-800 font-bold'>
+                      {family.pregnantMembers ?? 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className='text-slate-500 font-semibold'>Mobility</p>
+                    <p className='text-slate-800 font-bold'>
+                      {family.mobilityNeedsCount ?? 0}
+                    </p>
+                  </div>
+                  <div>
+                    <p className='text-slate-500 font-semibold'>Medication</p>
+                    <p className='text-slate-800 font-bold'>
+                      {family.maintenanceMedicationCount ?? 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className='mt-6 p-4 bg-white border border-gray-200 rounded'>
+                <p className='text-xs font-bold text-slate-700 mb-3'>
+                  Household Members
+                </p>
+                {householdMembers.length === 0 ? (
+                  <p className='text-sm text-slate-600'>
+                    No household members listed.
+                  </p>
+                ) : (
+                  <div className='space-y-2'>
+                    {householdMembers.map((member, index) => (
+                      <div
+                        key={`household-member-${index}`}
+                        className='p-3 border border-gray-200 rounded bg-gray-50 text-xs'
+                      >
+                        <p className='font-bold text-slate-800'>
+                          {member?.name || `Member ${index + 1}`}
+                        </p>
+                        <p className='text-slate-600 mt-1'>
+                          Date of Birth: {this.renderMemberDob(member)} •
+                          Relationship: {member?.relationship || "—"}
+                        </p>
+                        <p className='text-slate-600 mt-1'>
+                          Disability:{" "}
+                          {disabilityLabelMap[member?.disabilityType] ||
+                            member?.disabilityType ||
+                            "None"}
+                        </p>
+                        <p className='text-slate-600 mt-1'>
+                          Mobility Needs:{" "}
+                          {member?.hasMobilityNeeds ? "Yes" : "No"} • Medical
+                          Needs: {member?.hasMedicalNeeds ? "Yes" : "No"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {family?.notes && (
+                <div className='mt-6 p-4 bg-blue-50 border border-blue-100 rounded'>
+                  <p className='text-xs font-bold text-blue-900 mb-2'>
+                    Family Notes
+                  </p>
+                  <p className='text-sm text-slate-700'>{family.notes}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default ViewFamilyProfile;

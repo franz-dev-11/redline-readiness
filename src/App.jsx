@@ -11,6 +11,7 @@ import ResidentDashboard from "./pages/Resident-Home/ResidentDashboard";
 import AdminDashboard from "./pages/Admin/AdminDashboard";
 import GovernmentDashboard from "./pages/Gov-Home/GovernmentDashboard.jsx";
 import SetupProfile from "./pages/Profile/SetupProfile";
+import SetupFamilyProfile from "./pages/Profile/SetupFamilyProfile";
 import ViewProfile from "./pages/Profile/ViewProfile";
 import ViewManager from "./services/ViewManager";
 import PageTransition from "./components/PageTransition";
@@ -157,7 +158,15 @@ class App extends React.Component {
           "home",
           <ResidentDashboard
             onLogout={() => ViewManager.goToSelection()}
-            onOpenSetup={() => ViewManager.goToSetupProfile()}
+            onOpenSetup={(accountType) => {
+              const normalizedType = String(accountType || "").toLowerCase();
+              if (normalizedType === "residential-family") {
+                ViewManager.goToFamilySetupProfile();
+                return;
+              }
+
+              ViewManager.goToSetupProfile();
+            }}
             onViewProfile={() => ViewManager.goToViewProfile()}
           />,
         );
@@ -166,6 +175,12 @@ class App extends React.Component {
         return this.renderWithTransition(
           "setup-profile",
           <SetupProfile onBack={() => ViewManager.goToHome()} />,
+        );
+
+      case "family-setup-profile":
+        return this.renderWithTransition(
+          "family-setup-profile",
+          <SetupFamilyProfile onBack={() => ViewManager.goToHome()} />,
         );
 
       case "view-profile":

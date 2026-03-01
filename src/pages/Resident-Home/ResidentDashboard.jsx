@@ -152,6 +152,7 @@ class ResidentDashboard extends React.Component {
 
     this.state = {
       userName: "Resident",
+      accountType: "",
       userPhotoUrl: "",
       showProfileMenu: false,
       activeTab: "dashboard",
@@ -294,6 +295,7 @@ class ResidentDashboard extends React.Component {
 
       this.setState({
         userName: userData.fullName || "Resident",
+        accountType: userData.accountType || userData.userType || "",
         userPhotoUrl: userData.photoUrl || "",
         accessibilitySettings: normalizeAccessibilitySettings(
           userData?.accessibilitySettings,
@@ -418,6 +420,7 @@ class ResidentDashboard extends React.Component {
           const userData = docSnap.data();
           this.setState({
             userName: userData.fullName || "Resident",
+            accountType: userData.accountType || userData.userType || "",
             userPhotoUrl: userData.photoUrl || "",
             accessibilitySettings: normalizeAccessibilitySettings(
               userData?.accessibilitySettings,
@@ -884,7 +887,7 @@ class ResidentDashboard extends React.Component {
                 onClick={() => {
                   this.setState({ showProfileMenu: false });
                   if (typeof this.props.onOpenSetup === "function") {
-                    this.props.onOpenSetup();
+                    this.props.onOpenSetup(this.state.accountType);
                   }
                 }}
                 className='w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-gray-50 flex items-center gap-3 font-bold transition-colors'

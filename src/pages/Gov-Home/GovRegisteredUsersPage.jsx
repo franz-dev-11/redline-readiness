@@ -80,6 +80,24 @@ function getSectorGroup(user) {
   return "general";
 }
 
+function getAccountTypeGroup(user) {
+  const accountType = String(user?.accountType || "").toLowerCase();
+  const role = String(user?.role || "").toLowerCase();
+
+  if (accountType.includes("family") || role.includes("family")) {
+    return "family";
+  }
+
+  if (
+    user?.familyProfile ||
+    (Array.isArray(user?.householdMembers) && user.householdMembers.length > 0)
+  ) {
+    return "family";
+  }
+
+  return "individual";
+}
+
 function getConsentStatus(user) {
   if (typeof user?.trackingConsent === "boolean") {
     return user.trackingConsent ? "Granted" : "Declined";
@@ -165,6 +183,16 @@ function GovRegisteredUsersPage({
     [filteredUsers],
   );
 
+  const accountTypeFilteredUsers = React.useMemo(() => {
+    if (filterStatus === "family" || filterStatus === "individual") {
+      return residentOnlyUsers.filter(
+        (user) => getAccountTypeGroup(user) === filterStatus,
+      );
+    }
+
+    return residentOnlyUsers;
+  }, [filterStatus, residentOnlyUsers]);
+
   React.useEffect(() => {
     const scanLogsRef = collection(db, "scanLogs");
     const logsQuery = query(
@@ -208,13 +236,13 @@ function GovRegisteredUsersPage({
 
   const sectorFilteredUsers = React.useMemo(() => {
     if (sectorFilter === "all") {
-      return residentOnlyUsers;
+      return accountTypeFilteredUsers;
     }
 
-    return residentOnlyUsers.filter(
+    return accountTypeFilteredUsers.filter(
       (user) => getSectorGroup(user) === sectorFilter,
     );
-  }, [residentOnlyUsers, sectorFilter]);
+  }, [accountTypeFilteredUsers, sectorFilter]);
 
   const filteredQrAuditLogs = React.useMemo(() => {
     const now = new Date();
@@ -382,12 +410,12 @@ function GovRegisteredUsersPage({
               placeholder='Search user...'
               value={searchTerm}
               onChange={onSearch}
-              className='w-full md:w-64 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+              className='w-full md:w-64 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-900 placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
             />
             <select
               value={filterStatus}
               onChange={onFilterChange}
-              className='px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+              className='px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
             >
               <option value='all'>All</option>
               <option value='family'>Families</option>
@@ -397,7 +425,7 @@ function GovRegisteredUsersPage({
             <select
               value={sectorFilter}
               onChange={(event) => setSectorFilter(event.target.value)}
-              className='px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+              className='px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
             >
               <option value='all'>Sector: All</option>
               <option value='pwd'>Sector: PWD</option>
@@ -453,6 +481,8 @@ function GovRegisteredUsersPage({
                       const beaconStatus = getBeaconStatus(user);
                       const mobilityFlag = hasMobilityFlag(user);
                       const medicalFlag = hasMedicalFlag(user);
+                      const accountTypeLabel =
+                        user.accountType || user.role || "Resident";
 
                       return (
                         <div
@@ -466,6 +496,9 @@ function GovRegisteredUsersPage({
                               </p>
                               <p className='text-xs text-gray-500 truncate'>
                                 {user.email || "No email"}
+                              </p>
+                              <p className='text-xs text-gray-500 truncate'>
+                                Account Type: {accountTypeLabel}
                               </p>
                             </div>
                             <div className='flex flex-wrap items-center gap-1.5'>

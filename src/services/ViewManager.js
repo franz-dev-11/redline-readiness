@@ -17,6 +17,7 @@ class ViewManager {
       ADMIN_DASHBOARD: "admin-dashboard",
       GOV_DASHBOARD: "gov-dashboard",
       SETUP_PROFILE: "setup-profile",
+      FAMILY_SETUP_PROFILE: "family-setup-profile",
       VIEW_PROFILE: "view-profile",
     };
 
@@ -109,6 +110,13 @@ class ViewManager {
    */
   goToSetupProfile() {
     this.navigateTo(this.views.SETUP_PROFILE);
+  }
+
+  /**
+   * Go to family setup profile
+   */
+  goToFamilySetupProfile() {
+    this.navigateTo(this.views.FAMILY_SETUP_PROFILE);
   }
 
   /**

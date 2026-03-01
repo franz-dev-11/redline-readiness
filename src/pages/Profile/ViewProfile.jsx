@@ -4,6 +4,7 @@ import AuthService from "../../services/AuthService";
 import { auth } from "../../firebase";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
+import ViewFamilyProfile from "./ViewFamilyProfile";
 
 /**
  * ViewProfile - OOP Class-based Component
@@ -80,18 +81,29 @@ class ViewProfile extends React.Component {
     }
 
     const personal = profile?.personalInfo || {};
-    const displayName =
-      personal.fullName || profile?.fullName || "Resident Profile";
+    const family = profile?.familyProfile || {};
+    const isFamilyProfile =
+      profile?.accountType === "residential-family" ||
+      family?.profileMode === "family";
+
+    if (isFamilyProfile) {
+      return <ViewFamilyProfile profile={profile} onBack={this.props.onBack} />;
+    }
+
+    const displayName = isFamilyProfile
+      ? family.householdName ||
+        family.householdHead ||
+        profile?.fullName ||
+        "Family Profile"
+      : personal.fullName || profile?.fullName || "Resident Profile";
     const photoUrl = personal.photoUrl || profile?.photoUrl || "";
+    const contactValue = personal.contact || profile?.phone || "—";
+    const addressValue = personal.address || "—";
     const selectedDisabilities =
       profile?.selectedDisabilities ||
       Object.keys(profile?.disabilities || {}).filter(
         (key) => profile.disabilities[key],
       );
-    const qrCodeValue = profile?.profileQrCode;
-    const qrImageUrl = qrCodeValue
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrCodeValue)}`
-      : null;
 
     return (
       <div className='min-h-screen bg-[#f3f4f6]'>
@@ -130,37 +142,37 @@ class ViewProfile extends React.Component {
               </h1>
 
               <div className='grid grid-cols-1 md:grid-cols-2 gap-4 text-sm'>
-                <div>
-                  <p className='text-gray-500 text-xs font-bold'>
-                    Date of Birth
-                  </p>
-                  <p className='font-bold text-slate-700'>
-                    {personal.dob || "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className='text-gray-500 text-xs font-bold'>Gender</p>
-                  <p className='font-bold text-slate-700'>
-                    {personal.gender || "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className='text-gray-500 text-xs font-bold'>Contact</p>
-                  <p className='font-bold text-slate-700'>
-                    {personal.contact || "—"}
-                  </p>
-                </div>
-                <div>
-                  <p className='text-gray-500 text-xs font-bold'>Blood Type</p>
-                  <p className='font-bold text-slate-700'>
-                    {personal.bloodType || "—"}
-                  </p>
-                </div>
+                <>
+                  <div>
+                    <p className='text-gray-500 text-xs font-bold'>
+                      Date of Birth
+                    </p>
+                    <p className='font-bold text-slate-700'>
+                      {personal.dob || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className='text-gray-500 text-xs font-bold'>Gender</p>
+                    <p className='font-bold text-slate-700'>
+                      {personal.gender || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className='text-gray-500 text-xs font-bold'>Contact</p>
+                    <p className='font-bold text-slate-700'>{contactValue}</p>
+                  </div>
+                  <div>
+                    <p className='text-gray-500 text-xs font-bold'>
+                      Blood Type
+                    </p>
+                    <p className='font-bold text-slate-700'>
+                      {personal.bloodType || "—"}
+                    </p>
+                  </div>
+                </>
                 <div className='md:col-span-2'>
                   <p className='text-gray-500 text-xs font-bold'>Address</p>
-                  <p className='font-bold text-slate-700'>
-                    {personal.address || "—"}
-                  </p>
+                  <p className='font-bold text-slate-700'>{addressValue}</p>
                 </div>
               </div>
 

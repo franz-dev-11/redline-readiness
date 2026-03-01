@@ -151,7 +151,7 @@ class GovernmentLogin extends React.Component {
 
             <form className='space-y-4' onSubmit={this.handleSubmit}>
               <div className='relative'>
-                <span className='absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400'>
+                <span className='absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-gray-400 pointer-events-none'>
                   <FontAwesomeIcon icon={faUserShield} />
                 </span>
                 <input
@@ -165,7 +165,7 @@ class GovernmentLogin extends React.Component {
               </div>
 
               <div className='relative'>
-                <span className='absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400'>
+                <span className='absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-gray-400 pointer-events-none'>
                   <FontAwesomeIcon icon={faLock} />
                 </span>
                 <input
@@ -177,7 +177,7 @@ class GovernmentLogin extends React.Component {
                   className='w-full pl-10 pr-10 py-3 border border-gray-200 rounded bg-[#f3f4f6] text-sm focus:outline-none text-black focus:ring-2 focus:ring-red-200 placeholder-gray-400'
                 />
                 <span
-                  className='absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 cursor-pointer'
+                  className='absolute inset-y-0 right-0 z-10 flex items-center pr-3 text-gray-400 cursor-pointer'
                   onClick={this.togglePasswordVisibility}
                 >
                   <FontAwesomeIcon

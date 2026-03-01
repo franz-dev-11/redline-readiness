@@ -1,12 +1,12 @@
 import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faUser,
+  faUserShield,
+  faLock,
   faEyeSlash,
   faArrowLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import AuthService from "../../services/AuthService";
-import Header from "../../components/Header";
 
 import logo from "../../assets/logo.png";
 import banner from "../../assets/disaster.jpg";
@@ -132,16 +132,24 @@ class ResidentLogin extends React.Component {
               </div>
             )}
             <form className='space-y-4' onSubmit={this.handleLogin}>
-              <input
-                required
-                type='email'
-                name='email'
-                placeholder='Enter your email'
-                value={email}
-                onChange={this.handleInputChange}
-                className='w-full px-4 py-3 border border-gray-200 rounded bg-[#f3f4f6] text-sm focus:outline-none text-black focus:ring-2 focus:ring-red-200'
-              />
               <div className='relative'>
+                <span className='absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-gray-400 pointer-events-none'>
+                  <FontAwesomeIcon icon={faUserShield} />
+                </span>
+                <input
+                  required
+                  type='email'
+                  name='email'
+                  placeholder='Enter your email'
+                  value={email}
+                  onChange={this.handleInputChange}
+                  className='w-full pl-10 pr-4 py-3 border border-gray-200 rounded bg-[#f3f4f6] text-sm focus:outline-none text-black focus:ring-2 focus:ring-red-200 placeholder-gray-400'
+                />
+              </div>
+              <div className='relative'>
+                <span className='absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-gray-400 pointer-events-none'>
+                  <FontAwesomeIcon icon={faLock} />
+                </span>
                 <input
                   required
                   type={showPassword ? "text" : "password"}
@@ -149,16 +157,13 @@ class ResidentLogin extends React.Component {
                   placeholder='Password'
                   value={password}
                   onChange={this.handleInputChange}
-                  className='w-full px-4 py-3 border border-gray-200 rounded bg-[#f3f4f6] text-sm focus:outline-none text-black focus:ring-2 focus:ring-red-200 pr-10'
+                  className='w-full pl-10 pr-10 py-3 border border-gray-200 rounded bg-[#f3f4f6] text-sm focus:outline-none text-black focus:ring-2 focus:ring-red-200 placeholder-gray-400'
                 />
                 <span
-                  className='absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 cursor-pointer'
+                  className='absolute inset-y-0 right-0 z-10 flex items-center pr-3 text-gray-400 cursor-pointer'
                   onClick={this.togglePasswordVisibility}
                 >
-                  <FontAwesomeIcon
-                    icon={showPassword ? faUser : faEyeSlash}
-                    className='text-xs'
-                  />
+                  <FontAwesomeIcon icon={faEyeSlash} className='text-xs' />
                 </span>
               </div>
               <button

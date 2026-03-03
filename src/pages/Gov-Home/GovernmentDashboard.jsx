@@ -12,15 +12,13 @@ import {
   faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 import {
-  MapContainer,
-  TileLayer,
+  Map,
   Marker,
-  Popup,
-  Circle,
-  Tooltip,
-} from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
+  Source,
+  Layer,
+  NavigationControl,
+} from "react-map-gl/maplibre";
+import maplibregl from "maplibre-gl";
 import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
 import Header from "../../components/Header";
 import AuthService from "../../services/AuthService";
@@ -34,16 +32,79 @@ import {
   normalizeAccessibilitySettings,
 } from "../../services/AccessibilityViewUtils";
 
-// Fix for default marker icons in Leaflet
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
-  iconUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-  shadowUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-});
+const MAP_STYLE = {
+  version: 8,
+  sources: {
+    cartoLight: {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors © CARTO",
+    },
+  },
+  layers: [{ id: "cartoLight", type: "raster", source: "cartoLight" }],
+};
+
+const ACCURACY_LAYER_STYLE = {
+  id: "gov-user-accuracy-circle",
+  type: "circle",
+  paint: {
+    "circle-color": "#60a5fa",
+    "circle-opacity": 0.2,
+    "circle-stroke-color": "#2563eb",
+    "circle-stroke-width": 2,
+    "circle-radius": [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      0,
+      0,
+      20,
+      ["/", ["get", "accuracy"], 0.075],
+    ],
+  },
+};
+
+function toLngLat(position) {
+  if (!Array.isArray(position) || position.length < 2) return null;
+  const lat = Number(position[0]);
+  const lng = Number(position[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return [lng, lat];
+}
+
+function renderMapPin(color) {
+  return (
+    <div
+      style={{
+        backgroundColor: color,
+        width: 30,
+        height: 30,
+        borderRadius: "50%",
+        border: "3px solid white",
+        boxShadow: "0 10px 22px rgba(15,23,42,0.32)",
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: "#ffffff",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+        }}
+      />
+    </div>
+  );
+}
 
 /**
  * GovernmentDashboard - OOP Class-based Component
@@ -101,6 +162,8 @@ class GovernmentDashboard extends React.Component {
       mapCenter: [14.8285, 120.9577],
       mapZoom: 14,
       mapDisplayMode: "sector-view",
+      userCurrentLocation: null,
+      locationAccuracyMeters: null,
 
       // Registered Users
       registeredUsers: [],
@@ -114,6 +177,7 @@ class GovernmentDashboard extends React.Component {
       announcementText: "",
       announcementTargetGroup: "all",
       postingAnnouncement: false,
+      resolvingSosEventId: null,
       qrScanValue: "",
       qrScanResult: null,
       qrScanError: "",
@@ -150,14 +214,21 @@ class GovernmentDashboard extends React.Component {
       this.handleAnnouncementTargetChange.bind(this);
     this.handlePostAnnouncement = this.handlePostAnnouncement.bind(this);
     this.handleMapModeChange = this.handleMapModeChange.bind(this);
+    this.handleLocateUser = this.handleLocateUser.bind(this);
+    this.handleMapLocationFound = this.handleMapLocationFound.bind(this);
+    this.handleMapLocationError = this.handleMapLocationError.bind(this);
     this.handleQrScanInputChange = this.handleQrScanInputChange.bind(this);
     this.handleQrLookup = this.handleQrLookup.bind(this);
     this.getEventCoordinates = this.getEventCoordinates.bind(this);
+    this.getEventLocationLabel = this.getEventLocationLabel.bind(this);
+    this.getDirectionsUrlForCoordinates =
+      this.getDirectionsUrlForCoordinates.bind(this);
     this.startUserProfileListener = this.startUserProfileListener.bind(this);
     this.handleGovProfileMenuToggle =
       this.handleGovProfileMenuToggle.bind(this);
     this.handleGovProfileMenuClose = this.handleGovProfileMenuClose.bind(this);
     this.handleGovDropdownLogout = this.handleGovDropdownLogout.bind(this);
+    this.handleResolveSosAlert = this.handleResolveSosAlert.bind(this);
   }
 
   /**
@@ -434,6 +505,105 @@ class GovernmentDashboard extends React.Component {
     this.setState({ mapDisplayMode: mode });
   }
 
+  handleLocateUser() {
+    let settled = false;
+    let watchId = null;
+    let settleTimer = null;
+    let bestCoords = null;
+
+    const cleanup = () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+      }
+    };
+
+    const finalize = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+
+      if (!bestCoords) {
+        this.handleMapLocationError();
+        return;
+      }
+
+      this.handleMapLocationFound(bestCoords);
+    };
+
+    if (!navigator.geolocation) {
+      this.handleMapLocationError();
+      return;
+    }
+
+    this.setState({ userCurrentLocation: null, locationAccuracyMeters: null });
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const lat = Number(position.coords.latitude.toFixed(6));
+        const lng = Number(position.coords.longitude.toFixed(6));
+        const accuracy =
+          Number(position.coords.accuracy) || Number.POSITIVE_INFINITY;
+
+        if (!bestCoords || accuracy < bestCoords.accuracy) {
+          bestCoords = { lat, lng, accuracy };
+        }
+
+        if (accuracy <= 20) {
+          finalize();
+        }
+      },
+      (error) => {
+        if (error?.code === 1) {
+          finalize();
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+
+    settleTimer = setTimeout(() => finalize(), 7000);
+  }
+
+  handleMapLocationFound(locationData) {
+    if (!locationData) return;
+
+    const lat = Number(locationData.lat);
+    const lng = Number(locationData.lng);
+    const accuracy = Number(locationData.accuracy);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return;
+    }
+
+    this.setState((prevState) => {
+      const prevAccuracy = Number(prevState.locationAccuracyMeters);
+      const hasBetterAccuracy =
+        !Number.isFinite(prevAccuracy) ||
+        !Number.isFinite(accuracy) ||
+        accuracy <= prevAccuracy;
+
+      if (!hasBetterAccuracy) {
+        return null;
+      }
+
+      return {
+        mapCenter: [lat, lng],
+        userCurrentLocation: [lat, lng],
+        locationAccuracyMeters: Number.isFinite(accuracy)
+          ? Math.round(accuracy)
+          : null,
+      };
+    });
+  }
+
+  handleMapLocationError() {
+    alert(
+      "Unable to determine current location. Please allow location access and try again.",
+    );
+  }
+
   handleQrScanInputChange(event) {
     this.setState({ qrScanValue: event.target.value, qrScanError: "" });
   }
@@ -477,14 +647,107 @@ class GovernmentDashboard extends React.Component {
   }
 
   getEventCoordinates(event) {
-    const lat = Number(event?.coordinates?.lat);
-    const lng = Number(event?.coordinates?.lng);
+    const lat = Number(
+      event?.coordinates?.lat ??
+        event?.coordinates?.latitude ??
+        event?.lat ??
+        event?.latitude,
+    );
+    const lng = Number(
+      event?.coordinates?.lng ??
+        event?.coordinates?.lon ??
+        event?.coordinates?.longitude ??
+        event?.lng ??
+        event?.lon ??
+        event?.longitude,
+    );
 
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       return [lat, lng];
     }
 
+    if (Array.isArray(event?.coordinates) && event.coordinates.length >= 2) {
+      const arrayLat = Number(event.coordinates[0]);
+      const arrayLng = Number(event.coordinates[1]);
+      if (Number.isFinite(arrayLat) && Number.isFinite(arrayLng)) {
+        return [arrayLat, arrayLng];
+      }
+    }
+
+    const rawLabel = String(event?.locationLabel || "").trim();
+    const labelMatch = rawLabel.match(
+      /lat\s*(-?\d+(?:\.\d+)?)\s*,\s*lng\s*(-?\d+(?:\.\d+)?)/i,
+    );
+    if (labelMatch) {
+      const labelLat = Number(labelMatch[1]);
+      const labelLng = Number(labelMatch[2]);
+      if (Number.isFinite(labelLat) && Number.isFinite(labelLng)) {
+        return [labelLat, labelLng];
+      }
+    }
+
+    const plainPairMatch = rawLabel.match(
+      /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/,
+    );
+    if (plainPairMatch) {
+      const labelLat = Number(plainPairMatch[1]);
+      const labelLng = Number(plainPairMatch[2]);
+      if (Number.isFinite(labelLat) && Number.isFinite(labelLng)) {
+        return [labelLat, labelLng];
+      }
+    }
+
     return null;
+  }
+
+  getEventLocationLabel(event) {
+    const coordinates = this.getEventCoordinates(event);
+    if (coordinates) {
+      return `${coordinates[0].toFixed(6)}, ${coordinates[1].toFixed(6)}`;
+    }
+
+    return "Location not shared";
+  }
+
+  getDirectionsUrlForCoordinates(coordinates) {
+    if (!Array.isArray(coordinates) || coordinates.length < 2) {
+      return "";
+    }
+
+    const lat = Number(coordinates[0]);
+    const lng = Number(coordinates[1]);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return "";
+    }
+
+    return `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lng.toFixed(6)}&travelmode=driving`;
+  }
+
+  async handleResolveSosAlert(event) {
+    const { resolvingSosEventId, userId, agencyName } = this.state;
+
+    if (!event?.id || resolvingSosEventId || !userId) return;
+
+    const confirmed = window.confirm("Mark this SOS alert as resolved?");
+    if (!confirmed) return;
+
+    this.setState({ resolvingSosEventId: event.id });
+
+    try {
+      await EmergencyEventService.createResolutionEvent({
+        userId,
+        userName: agencyName || "Local Government Unit",
+        sourceEventId: event.id,
+        sourceType: event.type || "sos",
+        resolutionNote: "Resolved by government",
+      });
+      this.setState({ resolvingSosEventId: null });
+    } catch (error) {
+      console.error("Failed to resolve SOS alert:", error);
+      this.setState({ resolvingSosEventId: null });
+      alert("Failed to resolve SOS alert. Please try again.");
+    }
   }
 
   async handlePostAnnouncement() {
@@ -699,36 +962,6 @@ class GovernmentDashboard extends React.Component {
   }
 
   /**
-   * Create custom marker icon
-   * @private
-   */
-  createMarkerIcon(color) {
-    return L.divIcon({
-      className: "custom-marker",
-      html: `
-        <div style="
-          background-color: ${color};
-          width: 30px;
-          height: 30px;
-          border-radius: 50%;
-          border: 3px solid white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        ">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="16" height="16">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-          </svg>
-        </div>
-      `,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
-      popupAnchor: [0, -15],
-    });
-  }
-
-  /**
    * Render dashboard view
    * @private
    */
@@ -747,9 +980,12 @@ class GovernmentDashboard extends React.Component {
       mapDisplayMode,
       mapCenter,
       mapZoom,
+      userCurrentLocation,
+      locationAccuracyMeters,
       qrScanValue,
       qrScanResult,
       qrScanError,
+      resolvingSosEventId,
     } = this.state;
     const recentFeedEvents = emergencyEvents.slice(0, 8);
     const resolvedSourceEventIds = new Set(
@@ -919,20 +1155,70 @@ class GovernmentDashboard extends React.Component {
                 >
                   Evacuation View
                 </button>
+                <button
+                  type='button'
+                  onClick={this.handleLocateUser}
+                  className='px-3 py-1.5 rounded-lg text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200'
+                >
+                  Locate Me
+                </button>
               </div>
             </div>
 
             <div className='rounded-lg h-110 overflow-hidden border border-gray-200'>
-              <MapContainer
-                center={mapCenter}
+              <Map
+                mapLib={maplibregl}
+                mapStyle={MAP_STYLE}
+                longitude={mapCenter[1]}
+                latitude={mapCenter[0]}
                 zoom={mapZoom}
+                onMove={(event) => {
+                  const { latitude, longitude, zoom } = event.viewState;
+                  this.setState({
+                    mapCenter: [latitude, longitude],
+                    mapZoom: zoom,
+                  });
+                }}
                 style={{ height: "100%", width: "100%" }}
-                scrollWheelZoom={true}
+                scrollZoom={true}
               >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-                />
+                <NavigationControl position='bottom-right' />
+
+                {userCurrentLocation && (
+                  <Marker
+                    longitude={userCurrentLocation[1]}
+                    latitude={userCurrentLocation[0]}
+                    anchor='center'
+                  >
+                    <div className='w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow' />
+                  </Marker>
+                )}
+
+                {userCurrentLocation &&
+                  Number.isFinite(locationAccuracyMeters) && (
+                    <Source
+                      id='gov-user-accuracy'
+                      type='geojson'
+                      data={{
+                        type: "FeatureCollection",
+                        features: [
+                          {
+                            type: "Feature",
+                            properties: { accuracy: locationAccuracyMeters },
+                            geometry: {
+                              type: "Point",
+                              coordinates: [
+                                Number(userCurrentLocation[1]),
+                                Number(userCurrentLocation[0]),
+                              ],
+                            },
+                          },
+                        ],
+                      }}
+                    >
+                      <Layer {...ACCURACY_LAYER_STYLE} />
+                    </Source>
+                  )}
 
                 {effectiveMapMode === "sector-view" &&
                   barangayHeatmap.map((barangayItem) => {
@@ -947,160 +1233,76 @@ class GovernmentDashboard extends React.Component {
                         : densityRatio >= 0.33
                           ? "#f97316"
                           : "#22c55e";
+                    const lngLat = toLngLat(barangayItem.coordinates);
+                    if (!lngLat) return null;
 
                     return (
-                      <React.Fragment key={`sector-${barangayItem.id}`}>
-                        <Circle
-                          center={barangayItem.coordinates}
-                          radius={350 + densityRatio * 450}
-                          pathOptions={{
-                            color,
-                            fillColor: color,
-                            fillOpacity: 0.25,
-                            weight: 2,
-                          }}
-                        />
-                        <Marker
-                          position={barangayItem.coordinates}
-                          icon={this.createMarkerIcon(color)}
-                        >
-                          <Tooltip
-                            permanent
-                            direction='top'
-                            offset={[0, -20]}
-                            opacity={0.95}
-                            className='map-pin-label map-pin-label--full'
-                          >
+                      <Marker
+                        key={`sector-${barangayItem.id}`}
+                        longitude={lngLat[0]}
+                        latitude={lngLat[1]}
+                        anchor='bottom'
+                      >
+                        <div className='flex flex-col items-center gap-1'>
+                          <div className='map-pin-label map-pin-label--full'>
                             {barangayItem.sectorLabel}
-                          </Tooltip>
-                          <Popup>
-                            <div className='text-xs'>
-                              <p className='font-black text-[#3a4a5b]'>
-                                {barangayItem.sectorLabel}
-                              </p>
-                              <p className='text-gray-700'>
-                                PWD Cluster: {barangayItem.pwdClusterCount}
-                              </p>
-                              <p className='text-gray-600'>
-                                Residents tagged: {barangayItem.residentsCount}
-                              </p>
-                            </div>
-                          </Popup>
-                        </Marker>
-                      </React.Fragment>
+                          </div>
+                          {renderMapPin(color)}
+                        </div>
+                      </Marker>
                     );
                   })}
 
                 {effectiveMapMode === "sos-view" &&
                   activeSosEvents.map((event, index) => {
                     const coordinates = this.getEventCoordinates(event);
-                    const user = getUserByEvent(event);
-                    const medicalFlag =
-                      event.medicalNeeds ||
-                      user?.medicalInfo ||
-                      (user?.bloodType
-                        ? `Blood Type: ${user.bloodType}`
-                        : "None");
-                    if (!coordinates) return null;
+                    const lngLat = toLngLat(coordinates);
+                    if (!lngLat) return null;
 
                     return (
                       <Marker
                         key={`sos-${event.id || index}`}
-                        position={coordinates}
-                        icon={this.createMarkerIcon("#dc2626")}
+                        longitude={lngLat[0]}
+                        latitude={lngLat[1]}
+                        anchor='bottom'
                       >
-                        <Tooltip
-                          permanent
-                          direction='top'
-                          offset={[0, -20]}
-                          opacity={0.95}
-                          className='map-pin-label map-pin-label--full'
-                        >
-                          {event.userName || "SOS Alert"}
-                        </Tooltip>
-                        <Popup>
-                          <div className='text-xs'>
-                            <p className='font-black text-red-700'>SOS Alert</p>
-                            <p className='text-gray-700'>
-                              {event.userName || "Resident"}
-                            </p>
-                            <p className='text-gray-500'>
-                              {coordinates[0].toFixed(4)},{" "}
-                              {coordinates[1].toFixed(4)}
-                            </p>
-                            <p className='text-red-700 font-semibold'>
-                              Medical Flag: {medicalFlag}
-                            </p>
+                        <div className='flex flex-col items-center gap-1'>
+                          <div className='map-pin-label map-pin-label--full'>
+                            {event.userName || "SOS Alert"}
                           </div>
-                        </Popup>
+                          {renderMapPin("#dc2626")}
+                        </div>
                       </Marker>
                     );
                   })}
 
                 {effectiveMapMode === "evacuation-view" &&
                   evacuationCenters.map((center) => {
-                    const assignedFamilies = registeredUsers.filter(
-                      (user) =>
-                        user.accountType === "residential-family" &&
-                        ((user.assignedEvacCenterId &&
-                          Number(user.assignedEvacCenterId) === center.id) ||
-                          (typeof user.assignedEvacCenterName === "string" &&
-                            user.assignedEvacCenterName
-                              .toLowerCase()
-                              .includes(center.name.toLowerCase()))),
-                    ).length;
-                    const arrived = Math.min(center.current, assignedFamilies);
-                    const enRoute = Math.max(assignedFamilies - arrived, 0);
-                    const missing = Math.max(
-                      assignedFamilies - arrived - enRoute,
-                      Math.round(assignedFamilies * 0.1),
-                    );
+                    const lngLat = toLngLat(center.coordinates);
+                    if (!lngLat) return null;
 
                     return (
                       <Marker
                         key={`center-${center.id}`}
-                        position={center.coordinates}
-                        icon={this.createMarkerIcon(
-                          this.getMarkerColor(center.current, center.capacity),
-                        )}
+                        longitude={lngLat[0]}
+                        latitude={lngLat[1]}
+                        anchor='bottom'
                       >
-                        <Tooltip
-                          permanent
-                          direction='top'
-                          offset={[0, -20]}
-                          opacity={0.95}
-                          className='map-pin-label map-pin-label--full'
-                        >
-                          {center.name}
-                        </Tooltip>
-                        <Popup>
-                          <div className='text-xs min-w-44'>
-                            <p className='font-black text-[#3a4a5b]'>
-                              {center.name}
-                            </p>
-                            <p className='text-gray-600'>
-                              Capacity: {center.current}/{center.capacity}
-                            </p>
-                            <p className='text-gray-700 mt-1'>
-                              Assigned Families: {assignedFamilies}
-                            </p>
-                            <div className='mt-2 flex gap-1.5 flex-wrap'>
-                              <span className='px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700'>
-                                Arrived: {arrived}
-                              </span>
-                              <span className='px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700'>
-                                En Route: {enRoute}
-                              </span>
-                              <span className='px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700'>
-                                Missing: {missing}
-                              </span>
-                            </div>
+                        <div className='flex flex-col items-center gap-1'>
+                          <div className='map-pin-label map-pin-label--full'>
+                            {center.name}
                           </div>
-                        </Popup>
+                          {renderMapPin(
+                            this.getMarkerColor(
+                              center.current,
+                              center.capacity,
+                            ),
+                          )}
+                        </div>
                       </Marker>
                     );
                   })}
-              </MapContainer>
+              </Map>
             </div>
           </div>
 
@@ -1125,6 +1327,8 @@ class GovernmentDashboard extends React.Component {
                   {activeSosEvents.slice(0, 8).map((event) => {
                     const user = getUserByEvent(event);
                     const coordinates = this.getEventCoordinates(event);
+                    const directionsUrl =
+                      this.getDirectionsUrlForCoordinates(coordinates);
 
                     return (
                       <div
@@ -1136,9 +1340,7 @@ class GovernmentDashboard extends React.Component {
                         </p>
                         <p className='text-[11px] text-gray-700 mt-1'>
                           <span className='font-bold'>Location:</span>{" "}
-                          {coordinates
-                            ? `${coordinates[0].toFixed(4)}, ${coordinates[1].toFixed(4)}`
-                            : "Not shared"}
+                          {this.getEventLocationLabel(event)}
                         </p>
                         <p className='text-[11px] text-gray-700'>
                           <span className='font-bold'>Disability Type:</span>{" "}
@@ -1148,6 +1350,26 @@ class GovernmentDashboard extends React.Component {
                           <span className='font-bold'>Medical Needs:</span>{" "}
                           {getMedicalNeeds(user, event)}
                         </p>
+                        <button
+                          type='button'
+                          onClick={() => this.handleResolveSosAlert(event)}
+                          disabled={resolvingSosEventId === event.id}
+                          className='mt-2 px-3 py-1.5 bg-red-600 text-white rounded text-[11px] font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                        >
+                          {resolvingSosEventId === event.id
+                            ? "Resolving..."
+                            : "Resolve SOS"}
+                        </button>
+                        {directionsUrl && (
+                          <a
+                            href={directionsUrl}
+                            target='_blank'
+                            rel='noreferrer'
+                            className='mt-2 ml-2 inline-block px-3 py-1.5 bg-blue-600 text-white rounded text-[11px] font-bold hover:bg-blue-700'
+                          >
+                            Directions
+                          </a>
+                        )}
                       </div>
                     );
                   })}
@@ -1329,13 +1551,25 @@ class GovernmentDashboard extends React.Component {
             ) : (
               <div className='space-y-2 max-h-80 overflow-y-auto pr-1'>
                 {recentFeedEvents.map((event) => {
+                  const isGovernmentResolver =
+                    event.role === "government" ||
+                    event.accountType === "government" ||
+                    String(event.userName || "")
+                      .toLowerCase()
+                      .includes("government");
+                  const resolverDisplayName =
+                    String(event.userName || "").trim() ||
+                    (isGovernmentResolver
+                      ? "Government account"
+                      : "Resident account");
                   const actionLabel =
                     event.type === "sos"
                       ? "SOS Triggered"
                       : event.type === "announcement"
                         ? "LGU Announcement Posted"
                         : event.type === "resolution"
-                          ? "Alert Resolved"
+                          ? event.resolutionNote ||
+                            `Resolved by ${resolverDisplayName}`
                           : "Activity Logged";
 
                   return (
@@ -1345,7 +1579,7 @@ class GovernmentDashboard extends React.Component {
                     >
                       <p className='text-xs text-gray-700'>
                         <span className='font-bold'>User Access:</span>{" "}
-                        {event.userName || "Resident"}
+                        {resolverDisplayName}
                       </p>
                       <p className='text-xs text-gray-700'>
                         <span className='font-bold'>Timestamp:</span>{" "}

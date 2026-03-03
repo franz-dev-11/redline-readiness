@@ -119,7 +119,7 @@
   }
 }
 
-.leaflet-tooltip.map-pin-label {
+.map-pin-label {
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid rgba(59, 130, 246, 0.35);
   border-radius: 9999px;
@@ -132,17 +132,13 @@
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
 }
 
-.leaflet-tooltip-top.map-pin-label:before {
-  border-top-color: rgba(15, 23, 42, 0.92);
-}
-
-.leaflet-tooltip.map-pin-label--mini {
+.map-pin-label--mini {
   font-size: 9px;
   padding: 3px 8px;
   background: rgba(30, 41, 59, 0.88);
 }
 
-.leaflet-tooltip.map-pin-label--full {
+.map-pin-label--full {
   max-width: none;
   white-space: nowrap;
   overflow: visible;

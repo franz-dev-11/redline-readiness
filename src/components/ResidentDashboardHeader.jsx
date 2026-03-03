@@ -97,7 +97,6 @@ class ResidentDashboardHeader extends React.Component {
       userPhotoUrl,
       showProfileMenu,
       onProfileMenuClick,
-      menuContent,
       activeTab,
     } = this.props;
     const { isMobileMenuOpen } = this.state;

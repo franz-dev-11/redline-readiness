@@ -13,6 +13,23 @@ import { auth, db } from "../../firebase";
 import { doc, getDoc } from "firebase/firestore";
 import EmergencyEventService from "../../services/EmergencyEventService";
 
+const LOW_ACCURACY_THRESHOLD_METERS = 100;
+
+function isSecureGeolocationContext() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  if (window.isSecureContext) {
+    return true;
+  }
+
+  const hostname = window.location?.hostname || "";
+  return (
+    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+  );
+}
+
 class ResidentAlerts extends React.Component {
   constructor(props) {
     super(props);
@@ -34,7 +51,10 @@ class ResidentAlerts extends React.Component {
     this.startEmergencyFeedListener =
       this.startEmergencyFeedListener.bind(this);
     this.handleTriggerSOS = this.handleTriggerSOS.bind(this);
+    this.confirmLowAccuracyProceed = this.confirmLowAccuracyProceed.bind(this);
     this.resolveCurrentLocation = this.resolveCurrentLocation.bind(this);
+    this.resolveLocationLabelFromCoordinates =
+      this.resolveLocationLabelFromCoordinates.bind(this);
     this.formatDateTime = this.formatDateTime.bind(this);
     this.getAnnouncements = this.getAnnouncements.bind(this);
     this.getEvacuationUpdates = this.getEvacuationUpdates.bind(this);
@@ -108,8 +128,52 @@ class ResidentAlerts extends React.Component {
       }, 24);
   }
 
+  async resolveLocationLabelFromCoordinates(latitude, longitude) {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
+          latitude,
+        )}&lon=${encodeURIComponent(longitude)}&zoom=18&addressdetails=1`,
+      );
+
+      if (!response.ok) {
+        return "Pinned location";
+      }
+
+      const data = await response.json();
+      return data?.display_name || "Pinned location";
+    } catch (error) {
+      console.error("Failed to reverse-geocode SOS location:", error);
+      return "Pinned location";
+    }
+  }
+
+  confirmLowAccuracyProceed(accuracyMeters) {
+    const accuracyValue = Number(accuracyMeters);
+
+    if (
+      !Number.isFinite(accuracyValue) ||
+      accuracyValue <= LOW_ACCURACY_THRESHOLD_METERS
+    ) {
+      return true;
+    }
+
+    const roundedAccuracy = Math.round(accuracyValue);
+    return window.confirm(
+      `GPS accuracy is currently around ${roundedAccuracy}m (target: ≤${LOW_ACCURACY_THRESHOLD_METERS}m). Indoors, location may fall back to Wi-Fi/cellular triangulation, which is less accurate than satellite GPS. Move to an open area for better precision, or press OK to trigger SOS anyway.`,
+    );
+  }
+
   resolveCurrentLocation() {
     return new Promise((resolve) => {
+      if (!isSecureGeolocationContext()) {
+        resolve({
+          locationLabel: "Secure context required (HTTPS or localhost)",
+          coordinates: null,
+        });
+        return;
+      }
+
       if (!navigator.geolocation) {
         resolve({
           locationLabel: "Geolocation not supported",
@@ -118,23 +182,88 @@ class ResidentAlerts extends React.Component {
         return;
       }
 
-      navigator.geolocation.getCurrentPosition(
+      let settled = false;
+      let watchId = null;
+      let settleTimer = null;
+      let bestCoords = null;
+
+      const cleanup = () => {
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+        }
+        if (settleTimer) {
+          clearTimeout(settleTimer);
+        }
+      };
+
+      const finalize = async (fallbackLabel = "Location unavailable") => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+
+        if (!bestCoords) {
+          resolve({
+            locationLabel: fallbackLabel,
+            coordinates: null,
+          });
+          return;
+        }
+
+        const locationLabel = await this.resolveLocationLabelFromCoordinates(
+          bestCoords.lat,
+          bestCoords.lng,
+        );
+
+        resolve({
+          locationLabel,
+          coordinates: { lat: bestCoords.lat, lng: bestCoords.lng },
+          accuracyMeters: Number(bestCoords.accuracy),
+        });
+      };
+
+      watchId = navigator.geolocation.watchPosition(
         (position) => {
           const latitude = Number(position.coords.latitude.toFixed(6));
           const longitude = Number(position.coords.longitude.toFixed(6));
-          resolve({
-            locationLabel: `Lat ${latitude}, Lng ${longitude}`,
-            coordinates: { lat: latitude, lng: longitude },
-          });
+          const accuracy =
+            Number(position.coords.accuracy) || Number.POSITIVE_INFINITY;
+
+          if (!bestCoords || accuracy < bestCoords.accuracy) {
+            bestCoords = {
+              lat: latitude,
+              lng: longitude,
+              accuracy,
+            };
+          }
+
+          if (accuracy <= 20) {
+            finalize();
+          }
         },
-        () => {
-          resolve({
-            locationLabel: "Location permission denied",
-            coordinates: null,
-          });
+        (error) => {
+          if (error?.code === 1) {
+            finalize("Location permission denied");
+            return;
+          }
+
+          if (error?.code === 2) {
+            finalize(
+              "Location unavailable. Indoors, Wi-Fi/cellular triangulation may be inaccurate—move to an open area and retry.",
+            );
+            return;
+          }
+
+          if (error?.code === 3) {
+            finalize("Location request timed out. Please retry.");
+            return;
+          }
+
+          finalize();
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
       );
+
+      settleTimer = setTimeout(() => finalize(), 7000);
     });
   }
 
@@ -152,14 +281,26 @@ class ResidentAlerts extends React.Component {
     this.setState({ sendingSos: true });
 
     try {
-      const { locationLabel, coordinates } =
+      const { locationLabel, coordinates, accuracyMeters } =
         await this.resolveCurrentLocation();
       const now = new Date();
+      const lat = Number(coordinates?.lat);
+      const lng = Number(coordinates?.lng);
+
+      if (!this.confirmLowAccuracyProceed(accuracyMeters)) {
+        this.setState({ sendingSos: false });
+        return;
+      }
+
+      const coordinateLabel =
+        Number.isFinite(lat) && Number.isFinite(lng)
+          ? `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+          : locationLabel;
 
       await EmergencyEventService.createSosEvent({
         userId: currentUser.uid,
         userName,
-        locationLabel,
+        locationLabel: coordinateLabel,
         disabilityType,
         medicalNeeds,
         coordinates,
@@ -171,12 +312,14 @@ class ResidentAlerts extends React.Component {
       this.setState({
         sendingSos: false,
         sosTriggeredAt: now,
-        locationLabel,
+        locationLabel: coordinateLabel,
       });
     } catch (error) {
       console.error("Failed to trigger SOS:", error);
       this.setState({ sendingSos: false });
-      alert("Failed to trigger SOS. Please try again.");
+      alert(
+        "Failed to trigger SOS. Confirm location permission is enabled with precise/fine accuracy. If you are indoors, Wi-Fi/cellular triangulation can be less accurate than satellite GPS—try moving to an open area and retry.",
+      );
     }
   }
 

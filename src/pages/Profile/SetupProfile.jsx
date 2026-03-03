@@ -189,7 +189,7 @@ class SetupProfile extends React.Component {
           scanAgain: true,
         });
       }
-    } catch (err) {
+    } catch {
       this.setState({
         qrClaimError: "Network error.",
         qrClaimResult: null,
@@ -1187,8 +1187,7 @@ class SetupProfile extends React.Component {
    * Main render method
    */
   render() {
-    const { step, fullName, gender, bloodType, errors, isLoading } = this.state;
-    const age = this.getAge();
+    const { step, fullName, errors, isLoading } = this.state;
 
     return (
       <div className='min-h-screen bg-[#f3f4f6]'>

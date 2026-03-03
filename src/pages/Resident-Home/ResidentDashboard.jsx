@@ -1,15 +1,13 @@
 import React from "react";
 import {
-  MapContainer,
-  TileLayer,
+  Map,
   Marker,
-  ZoomControl,
-  Popup,
-  Tooltip,
-  useMap,
-} from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+  Source,
+  Layer,
+  NavigationControl,
+  GeolocateControl,
+} from "react-map-gl/maplibre";
+import maplibregl from "maplibre-gl";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faHouse,
@@ -46,20 +44,53 @@ import {
   normalizeAccessibilitySettings,
 } from "../../services/AccessibilityViewUtils";
 
-// Fix for Leaflet default marker icons
-import icon from "leaflet/dist/images/marker-icon.png";
-import iconShadow from "leaflet/dist/images/marker-shadow.png";
-
-let DefaultIcon = L.icon({
-  iconUrl: icon,
-  shadowUrl: iconShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-L.Marker.prototype.options.icon = DefaultIcon;
-
 // Constants
-const ORIGINAL_CENTER = [14.8193, 120.962];
+const ORIGINAL_CENTER = [120.962, 14.8193];
+
+const GEOLOCATION_POSITION_OPTIONS = {
+  enableHighAccuracy: true,
+  timeout: 10000,
+  maximumAge: 0,
+};
+
+const LOW_ACCURACY_THRESHOLD_METERS = 100;
+
+const MAP_STYLE = {
+  version: 8,
+  sources: {
+    cartoLight: {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors © CARTO",
+    },
+  },
+  layers: [{ id: "cartoLight", type: "raster", source: "cartoLight" }],
+};
+
+const ACCURACY_LAYER_STYLE = {
+  id: "user-accuracy-circle",
+  type: "circle",
+  paint: {
+    "circle-color": "#60a5fa",
+    "circle-opacity": 0.2,
+    "circle-stroke-color": "#2563eb",
+    "circle-stroke-width": 2,
+    "circle-radius": [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      0,
+      0,
+      20,
+      ["/", ["get", "accuracy"], 0.075],
+    ],
+  },
+};
 
 function parseCenterCapacityText(capacityText) {
   const match = String(capacityText || "").match(/(\d+)\s*\/\s*(\d+)/);
@@ -73,45 +104,57 @@ function parseCenterCapacityText(capacityText) {
   };
 }
 
-/**
- * MapViewHandler - Quick effect component for map updates
- * @private
- */
-function MapViewHandler({ center, recenterSignal }) {
-  const map = useMap();
-  React.useEffect(() => {
-    map.setView(center, 15, { animate: true });
-  }, [center, recenterSignal, map]);
-  return null;
+function toLngLat(position) {
+  if (!Array.isArray(position) || position.length < 2) return null;
+  const lng = Number(position[0]);
+  const lat = Number(position[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return [lng, lat];
 }
 
-function createCenterMarkerIcon(isFull, mini = false) {
+function isSecureGeolocationContext() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  if (window.isSecureContext) {
+    return true;
+  }
+
+  const hostname = window.location?.hostname || "";
+  return (
+    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+  );
+}
+
+function renderCenterPin(isFull, mini = false) {
   const size = mini ? 20 : 26;
   const bgColor = isFull ? "#dc2626" : "#2563eb";
   const ringColor = isFull ? "#fecaca" : "#bfdbfe";
   const iconSymbol = isFull ? "!" : "✓";
 
-  return L.divIcon({
-    className: "custom-center-marker",
-    html: `<div style="
-      width:${size}px;
-      height:${size}px;
-      border-radius:9999px;
-      background:${bgColor};
-      border:2px solid ${ringColor};
-      box-shadow:0 3px 10px rgba(15,23,42,0.28);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      color:#ffffff;
-      font-weight:900;
-      font-size:${mini ? 11 : 13}px;
-      line-height:1;
-    ">${iconSymbol}</div>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size],
-    popupAnchor: [0, -size],
-  });
+  return (
+    <div
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: "9999px",
+        background: bgColor,
+        border: `2px solid ${ringColor}`,
+        boxShadow: "0 10px 22px rgba(15,23,42,0.32)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#ffffff",
+        fontWeight: 900,
+        fontSize: `${mini ? 11 : 13}px`,
+        lineHeight: 1,
+      }}
+    >
+      {iconSymbol}
+    </div>
+  );
 }
 
 /**
@@ -125,7 +168,7 @@ class ResidentDashboard extends React.Component {
       id: 1,
       name: "Sta. Maria Covered Court",
       address: "789 Poblacion St., Sta. Maria, Bulacan",
-      position: [14.821, 120.963],
+      position: [120.963, 14.821],
       capacity: "79 / 120 Capacity",
       percent: 65,
       tag: "Wheelchair Accessible",
@@ -137,7 +180,7 @@ class ResidentDashboard extends React.Component {
       id: 2,
       name: "Cabayao Elementary School",
       address: "Cabayao St., Sta. Maria, Bulacan",
-      position: [14.815, 120.958],
+      position: [120.958, 14.815],
       capacity: "97 / 100 Capacity",
       percent: 97,
       tag: "PWD-Friendly",
@@ -158,13 +201,15 @@ class ResidentDashboard extends React.Component {
       activeTab: "dashboard",
       searchQuery: "",
       mapCenter: ORIGINAL_CENTER,
-      recenterSignal: 0,
+      userCurrentLocation: null,
+      locationAccuracyMeters: null,
       currentTime: new Date(),
       lastUpdatedAt: new Date(),
       sosTriggeredAt: null,
       isSharingLocation: false,
       locationShareStartedAt: null,
       locationShareEndsAt: null,
+      sharedLocationCoordinates: null,
       shareDurationMinutes: 15,
       evacuationCenters: ResidentDashboard.EVACUATION_CENTERS.map((center) => ({
         ...center,
@@ -195,9 +240,13 @@ class ResidentDashboard extends React.Component {
     };
 
     // Bind methods
+    this.geolocateControlRef = React.createRef();
     this.handleSearch = this.handleSearch.bind(this);
     this.handleProfileMenuClick = this.handleProfileMenuClick.bind(this);
     this.handleReturnToOrigin = this.handleReturnToOrigin.bind(this);
+    this.handleLocateUser = this.handleLocateUser.bind(this);
+    this.handleMapLocationFound = this.handleMapLocationFound.bind(this);
+    this.handleMapLocationError = this.handleMapLocationError.bind(this);
     this.handleEvacCardClick = this.handleEvacCardClick.bind(this);
     this.fetchUserData = this.fetchUserData.bind(this);
     this.startUserProfileListener = this.startUserProfileListener.bind(this);
@@ -211,7 +260,15 @@ class ResidentDashboard extends React.Component {
       this.startEvacuationCapacityListener.bind(this);
     this.getEventTimeLabel = this.getEventTimeLabel.bind(this);
     this.getNotificationItems = this.getNotificationItems.bind(this);
+    this.hasActiveSosForCurrentUser =
+      this.hasActiveSosForCurrentUser.bind(this);
     this.handleTriggerSOS = this.handleTriggerSOS.bind(this);
+    this.handleTriggerSosAndShare = this.handleTriggerSosAndShare.bind(this);
+    this.confirmLowAccuracyProceed = this.confirmLowAccuracyProceed.bind(this);
+    this.resolveLocationLabelFromCoordinates =
+      this.resolveLocationLabelFromCoordinates.bind(this);
+    this.resolveCurrentLocationForSos =
+      this.resolveCurrentLocationForSos.bind(this);
     this.handleShareLocation = this.handleShareLocation.bind(this);
     this.handleStopLocationShare = this.handleStopLocationShare.bind(this);
     this.getDirectionsUrl = this.getDirectionsUrl.bind(this);
@@ -237,7 +294,11 @@ class ResidentDashboard extends React.Component {
         ) {
           const currentUser = auth.currentUser;
           if (currentUser) {
-            const [lat, lng] = prevState.mapCenter;
+            const sharedLat = Number(prevState.sharedLocationCoordinates?.lat);
+            const sharedLng = Number(prevState.sharedLocationCoordinates?.lng);
+            const [mapLng, mapLat] = prevState.mapCenter;
+            const lat = Number.isFinite(sharedLat) ? sharedLat : mapLat;
+            const lng = Number.isFinite(sharedLng) ? sharedLng : mapLng;
             EmergencyEventService.createLocationShareStoppedEvent({
               userId: currentUser.uid,
               userName: prevState.userName,
@@ -256,6 +317,7 @@ class ResidentDashboard extends React.Component {
             isSharingLocation: false,
             locationShareStartedAt: null,
             locationShareEndsAt: null,
+            sharedLocationCoordinates: null,
             lastUpdatedAt: now,
           };
         }
@@ -473,11 +535,80 @@ class ResidentDashboard extends React.Component {
    * @private
    */
   handleReturnToOrigin() {
-    this.setState((prevState) => ({
+    this.setState({
       mapCenter: [...ORIGINAL_CENTER],
       searchQuery: "",
-      recenterSignal: prevState.recenterSignal + 1,
-    }));
+    });
+  }
+
+  handleLocateUser() {
+    if (!isSecureGeolocationContext()) {
+      this.handleMapLocationError(
+        "Location requires a secure origin. Use HTTPS in production (localhost is allowed in development).",
+      );
+      return;
+    }
+
+    if (this.geolocateControlRef.current?.trigger) {
+      this.geolocateControlRef.current.trigger();
+      return;
+    }
+
+    this.resolveCurrentLocationForSos()
+      .then(({ coordinates }) => {
+        const lat = Number(coordinates?.lat);
+        const lng = Number(coordinates?.lng);
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          this.handleMapLocationError();
+          return;
+        }
+
+        this.handleMapLocationFound({ lat, lng, accuracy: null });
+      })
+      .catch(() => {
+        this.handleMapLocationError();
+      });
+  }
+
+  handleMapLocationFound(locationData) {
+    if (!locationData) return;
+
+    const lat = Number(locationData.lat);
+    const lng = Number(locationData.lng);
+    const accuracy = Number(locationData.accuracy);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return;
+    }
+
+    this.setState((prevState) => {
+      const prevAccuracy = Number(prevState.locationAccuracyMeters);
+      const hasBetterAccuracy =
+        !Number.isFinite(prevAccuracy) ||
+        !Number.isFinite(accuracy) ||
+        accuracy <= prevAccuracy;
+
+      if (!hasBetterAccuracy) {
+        return null;
+      }
+
+      return {
+        mapCenter: [lng, lat],
+        userCurrentLocation: [lng, lat],
+        locationAccuracyMeters: Number.isFinite(accuracy)
+          ? Math.round(accuracy)
+          : null,
+        lastUpdatedAt: new Date(),
+      };
+    });
+  }
+
+  handleMapLocationError(message) {
+    alert(
+      message ||
+        "Unable to determine your current location. Check browser location permission, ensure precise/fine location is enabled, and try outdoors—indoor Wi-Fi/cellular triangulation is often less accurate than satellite GPS.",
+    );
   }
 
   /**
@@ -622,7 +753,7 @@ class ResidentDashboard extends React.Component {
           id: `feed-${event.id}`,
           type: "sos",
           title: "SOS Alert",
-          description: `${event.userName || "Resident"} triggered SOS.`,
+          description: `${event.userName || "Resident"} triggered SOS at ${event.locationLabel || "Pinned location"}.`,
           meta: this.getEventTimeLabel(event),
         };
       }
@@ -655,45 +786,277 @@ class ResidentDashboard extends React.Component {
     return unique.slice(0, 8);
   }
 
+  hasActiveSosForCurrentUser() {
+    const { emergencyEvents } = this.state;
+    const currentUserId = auth.currentUser?.uid;
+
+    if (!currentUserId) {
+      return false;
+    }
+
+    const resolvedSourceEventIds = new Set(
+      emergencyEvents
+        .filter((event) => event.type === "resolution" && event.sourceEventId)
+        .map((event) => event.sourceEventId),
+    );
+
+    return emergencyEvents.some(
+      (event) =>
+        event.type === "sos" &&
+        event.userId === currentUserId &&
+        event.status !== "resolved" &&
+        event.status !== "stopped" &&
+        !resolvedSourceEventIds.has(event.id),
+    );
+  }
+
+  confirmLowAccuracyProceed(accuracyMeters, mode = "sos") {
+    const accuracyValue = Number(accuracyMeters);
+
+    if (
+      !Number.isFinite(accuracyValue) ||
+      accuracyValue <= LOW_ACCURACY_THRESHOLD_METERS
+    ) {
+      return true;
+    }
+
+    const roundedAccuracy = Math.round(accuracyValue);
+    const actionLabel =
+      mode === "share" ? "share your location" : "trigger SOS";
+
+    return window.confirm(
+      `GPS accuracy is currently around ${roundedAccuracy}m (target: ≤${LOW_ACCURACY_THRESHOLD_METERS}m). Indoors, location may fall back to Wi-Fi/cellular triangulation, which is less accurate than satellite GPS. Move to an open area for better precision, or press OK to ${actionLabel} anyway.`,
+    );
+  }
+
   async handleTriggerSOS() {
+    if (this.hasActiveSosForCurrentUser()) {
+      return false;
+    }
+
     const now = new Date();
     const currentUser = auth.currentUser;
-    const [lat, lng] = this.state.mapCenter;
+    const { coordinates, locationLabel, accuracyMeters } =
+      await this.resolveCurrentLocationForSos();
+
+    const lat = Number(coordinates?.lat);
+    const lng = Number(coordinates?.lng);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      alert(
+        "Unable to get your exact GPS location. Please enable precise location and try again.",
+      );
+      return false;
+    }
+
+    if (!this.confirmLowAccuracyProceed(accuracyMeters, "sos")) {
+      return false;
+    }
+
+    const coordinateLabel =
+      Number.isFinite(lat) && Number.isFinite(lng)
+        ? `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+        : locationLabel;
 
     this.setState({
       sosTriggeredAt: now,
+      mapCenter: [lng, lat],
+      userCurrentLocation: [lng, lat],
+      locationAccuracyMeters: Number.isFinite(Number(accuracyMeters))
+        ? Math.round(Number(accuracyMeters))
+        : this.state.locationAccuracyMeters,
       lastUpdatedAt: now,
     });
 
-    if (!currentUser) return;
+    if (!currentUser) return false;
 
     try {
       await EmergencyEventService.createSosEvent({
         userId: currentUser.uid,
         userName: this.state.userName,
         triggeredAt: now,
+        locationLabel: coordinateLabel,
         coordinates: { lat, lng },
       });
+      return true;
     } catch (error) {
       console.error("Failed to persist SOS event:", error);
+      return false;
+    }
+  }
+
+  async handleTriggerSosAndShare() {
+    if (this.hasActiveSosForCurrentUser()) {
+      return;
+    }
+
+    const sosTriggered = await this.handleTriggerSOS();
+
+    if (sosTriggered && !this.state.isSharingLocation) {
+      await this.handleShareLocation();
+    }
+  }
+
+  resolveCurrentLocationForSos() {
+    return new Promise((resolve) => {
+      if (!isSecureGeolocationContext()) {
+        resolve({
+          locationLabel: "Secure context required (HTTPS or localhost)",
+          coordinates: null,
+        });
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        resolve({
+          locationLabel: "Location unavailable",
+          coordinates: null,
+        });
+        return;
+      }
+
+      let settled = false;
+      let watchId = null;
+      let settleTimer = null;
+      let bestCoords = null;
+      let sampleCount = 0;
+
+      const cleanup = () => {
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+        }
+        if (settleTimer) {
+          clearTimeout(settleTimer);
+        }
+      };
+
+      const finalize = async (fallbackLabel = "Location unavailable") => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+
+        if (!bestCoords) {
+          resolve({
+            locationLabel: fallbackLabel,
+            coordinates: null,
+          });
+          return;
+        }
+
+        const locationLabel = await this.resolveLocationLabelFromCoordinates(
+          bestCoords.lat,
+          bestCoords.lng,
+        );
+
+        resolve({
+          locationLabel,
+          coordinates: { lat: bestCoords.lat, lng: bestCoords.lng },
+          accuracyMeters: Number(bestCoords.accuracy),
+        });
+      };
+
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          sampleCount += 1;
+          const lat = Number(position.coords.latitude.toFixed(6));
+          const lng = Number(position.coords.longitude.toFixed(6));
+          const accuracy =
+            Number(position.coords.accuracy) || Number.POSITIVE_INFINITY;
+
+          if (!bestCoords || accuracy < bestCoords.accuracy) {
+            bestCoords = {
+              lat,
+              lng,
+              accuracy,
+            };
+          }
+
+          if (accuracy <= 10 && sampleCount >= 2) {
+            finalize();
+          }
+        },
+        (error) => {
+          if (error?.code === 1) {
+            finalize("Location permission denied");
+            return;
+          }
+
+          if (error?.code === 2) {
+            finalize(
+              "Location unavailable. Indoors, Wi-Fi/cellular triangulation may be inaccurate—move to an open area and retry.",
+            );
+            return;
+          }
+
+          if (error?.code === 3) {
+            finalize("Location request timed out. Please retry.");
+            return;
+          }
+
+          finalize();
+        },
+        GEOLOCATION_POSITION_OPTIONS,
+      );
+
+      settleTimer = setTimeout(() => finalize(), 12000);
+    });
+  }
+
+  async resolveLocationLabelFromCoordinates(lat, lng) {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
+          lat,
+        )}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1`,
+      );
+
+      if (!response.ok) {
+        return "Pinned location";
+      }
+
+      const data = await response.json();
+      return data?.display_name || "Pinned location";
+    } catch (error) {
+      console.error("Failed to reverse-geocode SOS location:", error);
+      return "Pinned location";
     }
   }
 
   async handleShareLocation() {
     const now = new Date();
-    const { shareDurationMinutes, userName, mapCenter } = this.state;
+    const { shareDurationMinutes, userName } = this.state;
     const currentUser = auth.currentUser;
     const endsAt = new Date(now.getTime() + shareDurationMinutes * 60000);
-    const [lat, lng] = mapCenter;
+    const { coordinates, accuracyMeters } =
+      await this.resolveCurrentLocationForSos();
+    const lat = Number(coordinates?.lat);
+    const lng = Number(coordinates?.lng);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      alert(
+        "Unable to get your exact GPS location for sharing. Please enable precise location and try again.",
+      );
+      return false;
+    }
+
+    if (!this.confirmLowAccuracyProceed(accuracyMeters, "share")) {
+      return false;
+    }
 
     this.setState({
       isSharingLocation: true,
       locationShareStartedAt: now,
       locationShareEndsAt: endsAt,
+      mapCenter: [lng, lat],
+      userCurrentLocation: [lng, lat],
+      locationAccuracyMeters: Number.isFinite(Number(accuracyMeters))
+        ? Math.round(Number(accuracyMeters))
+        : this.state.locationAccuracyMeters,
+      sharedLocationCoordinates: { lat, lng },
       lastUpdatedAt: now,
     });
 
-    if (!currentUser) return;
+    if (!currentUser) return false;
 
     try {
       await EmergencyEventService.createLocationShareEvent({
@@ -704,8 +1067,10 @@ class ResidentDashboard extends React.Component {
         durationMinutes: shareDurationMinutes,
         coordinates: { lat, lng },
       });
+      return true;
     } catch (error) {
       console.error("Failed to persist location sharing event:", error);
+      return false;
     }
   }
 
@@ -716,14 +1081,20 @@ class ResidentDashboard extends React.Component {
       shareDurationMinutes,
       userName,
       mapCenter,
+      sharedLocationCoordinates,
     } = this.state;
     const currentUser = auth.currentUser;
-    const [lat, lng] = mapCenter;
+    const sharedLat = Number(sharedLocationCoordinates?.lat);
+    const sharedLng = Number(sharedLocationCoordinates?.lng);
+    const [mapLng, mapLat] = mapCenter;
+    const lat = Number.isFinite(sharedLat) ? sharedLat : mapLat;
+    const lng = Number.isFinite(sharedLng) ? sharedLng : mapLng;
 
     this.setState({
       isSharingLocation: false,
       locationShareStartedAt: null,
       locationShareEndsAt: null,
+      sharedLocationCoordinates: null,
       lastUpdatedAt: now,
     });
 
@@ -745,8 +1116,18 @@ class ResidentDashboard extends React.Component {
   }
 
   getDirectionsUrl(position) {
-    const [lat, lng] = position;
-    return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+    if (!Array.isArray(position) || position.length < 2) {
+      return "";
+    }
+
+    const lng = Number(position[0]);
+    const lat = Number(position[1]);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return "";
+    }
+
+    return `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lng.toFixed(6)}&travelmode=driving`;
   }
 
   /**
@@ -837,7 +1218,8 @@ class ResidentDashboard extends React.Component {
       activeTab,
       searchQuery,
       mapCenter,
-      recenterSignal,
+      userCurrentLocation,
+      locationAccuracyMeters,
       isSharingLocation,
       accessibilitySettings,
       evacuationCenters,
@@ -853,6 +1235,7 @@ class ResidentDashboard extends React.Component {
     const sosTimestampLabel = this.getSosTimestampLabel();
     const locationShareDurationLabel = this.getLocationShareDurationLabel();
     const notificationItems = this.getNotificationItems();
+    const isSosLocked = this.hasActiveSosForCurrentUser();
     const accessibilityContainer = getAccessibilityContainerProps(
       accessibilitySettings,
     );
@@ -968,64 +1351,100 @@ class ResidentDashboard extends React.Component {
                         </p>
 
                         <div className='relative h-140 w-full border border-slate-200 rounded-lg overflow-hidden z-0 mt-4'>
-                          <MapContainer
-                            center={mapCenter}
+                          <Map
+                            mapLib={maplibregl}
+                            mapStyle={MAP_STYLE}
+                            longitude={mapCenter[0]}
+                            latitude={mapCenter[1]}
                             zoom={14}
-                            zoomControl={false}
+                            onMove={(event) => {
+                              const { latitude, longitude } = event.viewState;
+                              this.setState({
+                                mapCenter: [longitude, latitude],
+                              });
+                            }}
                             style={{ height: "100%", width: "100%" }}
                           >
-                            <MapViewHandler
-                              center={mapCenter}
-                              recenterSignal={recenterSignal}
+                            <NavigationControl position='bottom-right' />
+                            <GeolocateControl
+                              ref={this.geolocateControlRef}
+                              position='bottom-right'
+                              positionOptions={GEOLOCATION_POSITION_OPTIONS}
+                              trackUserLocation
+                              showUserHeading
+                              onGeolocate={(position) => {
+                                const lat = Number(position?.coords?.latitude);
+                                const lng = Number(position?.coords?.longitude);
+                                const accuracy = Number(
+                                  position?.coords?.accuracy,
+                                );
+
+                                this.handleMapLocationFound({
+                                  lat,
+                                  lng,
+                                  accuracy,
+                                });
+                              }}
                             />
-                            <TileLayer url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' />
-                            <ZoomControl position='bottomright' />
-                            {centers.map((center) => (
+                            {userCurrentLocation && (
                               <Marker
-                                key={center.id}
-                                position={center.position}
-                                icon={createCenterMarkerIcon(
-                                  center.isFull,
-                                  false,
-                                )}
+                                longitude={userCurrentLocation[0]}
+                                latitude={userCurrentLocation[1]}
+                                anchor='center'
                               >
-                                <Tooltip
-                                  permanent
-                                  direction='top'
-                                  offset={[0, -20]}
-                                  opacity={0.95}
-                                  className='map-pin-label'
-                                >
-                                  {center.name}
-                                </Tooltip>
-                                <Popup>
-                                  <div className='text-[11px] font-bold space-y-1'>
-                                    <b className='text-blue-700'>
-                                      {center.name}
-                                    </b>
-                                    <br />
-                                    {center.capacity}
-                                    <div className='text-[10px] font-black text-red-600'>
-                                      {center.percent >= 90
-                                        ? "Near Capacity"
-                                        : "Available"}
-                                    </div>
-                                    <a
-                                      href={this.getDirectionsUrl(
-                                        center.position,
-                                      )}
-                                      target='_blank'
-                                      rel='noreferrer'
-                                      className='inline-flex items-center gap-1 text-[10px] text-blue-700 font-black'
-                                    >
-                                      <FontAwesomeIcon icon={faRoute} /> Get
-                                      Directions
-                                    </a>
-                                  </div>
-                                </Popup>
+                                <div className='w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow' />
                               </Marker>
-                            ))}
-                          </MapContainer>
+                            )}
+                            {userCurrentLocation &&
+                              Number.isFinite(locationAccuracyMeters) && (
+                                <Source
+                                  id='resident-user-accuracy'
+                                  type='geojson'
+                                  data={{
+                                    type: "FeatureCollection",
+                                    features: [
+                                      {
+                                        type: "Feature",
+                                        properties: {
+                                          accuracy: locationAccuracyMeters,
+                                        },
+                                        geometry: {
+                                          type: "Point",
+                                          coordinates: [
+                                            Number(userCurrentLocation[0]),
+                                            Number(userCurrentLocation[1]),
+                                          ],
+                                        },
+                                      },
+                                    ],
+                                  }}
+                                >
+                                  <Layer {...ACCURACY_LAYER_STYLE} />
+                                </Source>
+                              )}
+                            {centers.map((center) => {
+                              const lngLat = toLngLat(center.position);
+                              if (!lngLat) return null;
+                              return (
+                                <Marker
+                                  key={center.id}
+                                  longitude={lngLat[0]}
+                                  latitude={lngLat[1]}
+                                  anchor='bottom'
+                                  onClick={() =>
+                                    this.handleEvacCardClick(center.position)
+                                  }
+                                >
+                                  <div className='flex flex-col items-center gap-1'>
+                                    <div className='map-pin-label map-pin-label--full'>
+                                      {center.name}
+                                    </div>
+                                    {renderCenterPin(center.isFull, false)}
+                                  </div>
+                                </Marker>
+                              );
+                            })}
+                          </Map>
 
                           {/* SEARCH & RETURN CONTROLS */}
                           <div className='absolute top-4 left-4 right-4 z-501 flex items-center gap-2 px-1'>
@@ -1046,10 +1465,10 @@ class ResidentDashboard extends React.Component {
                               />
                             </div>
 
-                            {/* RETURN TO ORIGINAL LOCATION BUTTON */}
+                            {/* HIGH-ACCURACY LOCATE BUTTON */}
                             <button
-                              onClick={this.handleReturnToOrigin}
-                              title='Return to original location'
+                              onClick={this.handleLocateUser}
+                              title='Locate my current position'
                               className='bg-white/95 border border-slate-200 p-2 rounded-xl text-blue-700 hover:bg-blue-50 transition-colors backdrop-blur-sm w-10 h-10 flex items-center justify-center'
                             >
                               <FontAwesomeIcon
@@ -1140,25 +1559,25 @@ class ResidentDashboard extends React.Component {
                             </p>
                             <div className='mt-3 grid grid-cols-2 gap-2'>
                               <button
-                                onClick={this.handleTriggerSOS}
-                                className='bg-red-600 text-white font-black py-2 rounded-xl text-[10px] hover:bg-red-700 uppercase tracking-wide transition-all'
+                                onClick={this.handleTriggerSosAndShare}
+                                disabled={isSosLocked}
+                                className='bg-red-600 text-white font-black py-2 rounded-xl text-[10px] hover:bg-red-700 uppercase tracking-wide transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-red-600'
                               >
-                                Trigger SOS
+                                {isSosLocked
+                                  ? "SOS Active (Resolve First)"
+                                  : "Trigger SOS + Share"}
                               </button>
-                              {!isSharingLocation ? (
-                                <button
-                                  onClick={this.handleShareLocation}
-                                  className='bg-blue-700 text-white font-black py-2 rounded-xl text-[10px] hover:bg-blue-800 uppercase tracking-wide transition-all'
-                                >
-                                  Share Location
-                                </button>
-                              ) : (
+                              {isSharingLocation ? (
                                 <button
                                   onClick={this.handleStopLocationShare}
                                   className='bg-slate-700 text-white font-black py-2 rounded-xl text-[10px] hover:bg-slate-800 uppercase tracking-wide transition-all'
                                 >
                                   Stop Sharing
                                 </button>
+                              ) : (
+                                <div className='bg-blue-50 border border-blue-100 text-blue-700 font-black py-2 rounded-xl text-[10px] uppercase tracking-wide text-center'>
+                                  Share on SOS
+                                </div>
                               )}
                             </div>
                             <div className='mt-3 space-y-1 border-t border-slate-200 pt-2'>
@@ -1234,33 +1653,39 @@ class ResidentDashboard extends React.Component {
                       Recommended Sites
                     </h3>
                     <div className='h-44 w-full border border-slate-200 rounded-lg relative overflow-hidden shadow-sm z-0 bg-white'>
-                      <MapContainer
-                        center={mapCenter}
+                      <Map
+                        mapLib={maplibregl}
+                        mapStyle={MAP_STYLE}
+                        longitude={mapCenter[0]}
+                        latitude={mapCenter[1]}
                         zoom={13}
-                        zoomControl={false}
-                        attributionControl={false}
-                        dragging={false}
+                        dragPan={false}
+                        scrollZoom={false}
+                        doubleClickZoom={false}
+                        touchZoomRotate={false}
+                        keyboard={false}
                         style={{ height: "100%", width: "100%" }}
                       >
-                        <TileLayer url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' />
-                        {centers.map((center) => (
-                          <Marker
-                            key={`mini-${center.id}`}
-                            position={center.position}
-                            icon={createCenterMarkerIcon(center.isFull, true)}
-                          >
-                            <Tooltip
-                              permanent
-                              direction='top'
-                              offset={[0, -18]}
-                              opacity={0.9}
-                              className='map-pin-label map-pin-label--mini'
+                        {centers.map((center) => {
+                          const lngLat = toLngLat(center.position);
+                          if (!lngLat) return null;
+                          return (
+                            <Marker
+                              key={`mini-${center.id}`}
+                              longitude={lngLat[0]}
+                              latitude={lngLat[1]}
+                              anchor='bottom'
                             >
-                              {center.name}
-                            </Tooltip>
-                          </Marker>
-                        ))}
-                      </MapContainer>
+                              <div className='flex flex-col items-center gap-1'>
+                                <div className='map-pin-label map-pin-label--mini'>
+                                  {center.name}
+                                </div>
+                                {renderCenterPin(center.isFull, true)}
+                              </div>
+                            </Marker>
+                          );
+                        })}
+                      </Map>
                       <div className='absolute top-2 right-2 z-500'>
                         <button className='bg-white/95 px-2 py-1 rounded-full text-[10px] font-black shadow-sm border border-slate-200 uppercase'>
                           SATELLITE

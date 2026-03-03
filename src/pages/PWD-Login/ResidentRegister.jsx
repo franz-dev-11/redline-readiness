@@ -2,13 +2,10 @@ import React from "react";
 // import * as QRCodeReact from "qrcode.react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faWheelchair,
   faUser,
   faEnvelope,
   faPhone,
   faLock,
-  faShieldHeart,
-  faArrowLeft,
   faIdCard,
   faCircleCheck,
 } from "@fortawesome/free-solid-svg-icons";

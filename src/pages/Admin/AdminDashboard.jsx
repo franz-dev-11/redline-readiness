@@ -448,6 +448,15 @@ class AdminDashboard extends React.Component {
     );
 
     const renderFeedCard = (event) => {
+      const isGovernmentResolver =
+        event.role === "government" ||
+        event.accountType === "government" ||
+        String(event.userName || "")
+          .toLowerCase()
+          .includes("government");
+      const resolverDisplayName =
+        String(event.userName || "").trim() ||
+        (isGovernmentResolver ? "Government account" : "Resident account");
       const sourceTypeLabel =
         event.sourceType === "sos"
           ? "SOS"
@@ -490,15 +499,19 @@ class AdminDashboard extends React.Component {
             {eventTypeLabel}
           </p>
           <p className='text-sm font-bold text-gray-700 mt-1'>
-            {event.userName || "Resident"}
+            {resolverDisplayName}
           </p>
           <p className='text-xs text-gray-500 mt-0.5'>
             {event.type === "resolution"
-              ? `${event.resolutionNote || "Resolved by resident"} (${sourceTypeLabel})`
-              : event.message ||
-                (event.durationMinutes
-                  ? `${event.durationMinutes}-minute temporary share`
-                  : "Emergency update")}
+              ? `${
+                  event.resolutionNote || `Resolved by ${resolverDisplayName}`
+                } (${sourceTypeLabel})`
+              : event.type === "sos"
+                ? `${event.userName || "Resident"} triggered SOS at ${event.locationLabel || "Pinned location"}.`
+                : event.message ||
+                  (event.durationMinutes
+                    ? `${event.durationMinutes}-minute temporary share`
+                    : "Emergency update")}
           </p>
           <p className='text-[11px] text-gray-400 mt-1'>
             {this.getEmergencyEventTimeLabel(event)}

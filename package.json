@@ -17,11 +17,11 @@
     "@vis.gl/react-google-maps": "^1.7.1",
     "firebase": "^12.9.0",
     "framer-motion": "^12.34.3",
-    "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",
+    "maplibre-gl": "^5.9.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-leaflet": "^5.0.0",
+    "react-map-gl": "^8.1.0",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {

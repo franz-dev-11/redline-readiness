@@ -20,6 +20,7 @@ import {
 } from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
 import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { db } from "../../firebase";
 import Header from "../../components/Header";
 import AuthService from "../../services/AuthService";
 import EmergencyEventService from "../../services/EmergencyEventService";
@@ -75,6 +76,13 @@ function toLngLat(position) {
   const lng = Number(position[1]);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   return [lng, lat];
+}
+
+function normalizeCenterKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 function renderMapPin(color) {
@@ -133,8 +141,8 @@ class GovernmentDashboard extends React.Component {
           id: 1,
           name: "Sta. Maria Covered Court",
           location: "Sta. Maria, Bulacan",
-          capacity: 120,
-          current: 79,
+          capacity: 0,
+          current: 0,
           status: "available",
           coordinates: [14.8285, 120.9577], // Sta. Maria, Bulacan coordinates
         },
@@ -142,8 +150,8 @@ class GovernmentDashboard extends React.Component {
           id: 2,
           name: "Cabuyao Elementary",
           location: "Cabuyao, Sta. Maria, Bulacan",
-          capacity: 100,
-          current: 97,
+          capacity: 0,
+          current: 0,
           status: "warning",
           coordinates: [14.8325, 120.9647],
         },
@@ -151,8 +159,8 @@ class GovernmentDashboard extends React.Component {
           id: 3,
           name: "San Isidro Chapel",
           location: "San Isidro, Sta. Maria, Bulacan",
-          capacity: 25,
-          current: 20,
+          capacity: 0,
+          current: 0,
           status: "available",
           coordinates: [14.8245, 120.9517],
         },
@@ -325,7 +333,7 @@ class GovernmentDashboard extends React.Component {
       this.capacityUnsubscribe();
     }
 
-    const capacityRef = collection(AuthService.db, "evacuationCenterCapacity");
+    const capacityRef = collection(db, "evacuationCenterCapacity");
 
     this.capacityUnsubscribe = onSnapshot(
       capacityRef,
@@ -350,8 +358,18 @@ class GovernmentDashboard extends React.Component {
         });
 
         this.setState((prevState) => {
+          const updatesByCenterName = new Map();
+          updatesByCenterId.forEach((update) => {
+            const key = normalizeCenterKey(update.name);
+            if (key) {
+              updatesByCenterName.set(key, update);
+            }
+          });
+
           const merged = prevState.evacuationCenters.map((center) => {
-            const update = updatesByCenterId.get(String(center.id));
+            const update =
+              updatesByCenterId.get(String(center.id)) ||
+              updatesByCenterName.get(normalizeCenterKey(center.name));
             if (!update) {
               return center;
             }
@@ -359,11 +377,11 @@ class GovernmentDashboard extends React.Component {
             const nextCapacity =
               Number.isFinite(update.capacity) && update.capacity > 0
                 ? update.capacity
-                : center.capacity;
+                : 0;
             const rawHeadcount =
               Number.isFinite(update.headcount) && update.headcount >= 0
                 ? update.headcount
-                : center.current;
+                : 0;
             const nextCurrent = Math.max(
               0,
               Math.min(rawHeadcount, Math.max(0, nextCapacity)),
@@ -714,6 +732,7 @@ class GovernmentDashboard extends React.Component {
       return "";
     }
 
+    const { userCurrentLocation } = this.state;
     const lat = Number(coordinates[0]);
     const lng = Number(coordinates[1]);
 
@@ -721,7 +740,17 @@ class GovernmentDashboard extends React.Component {
       return "";
     }
 
-    return `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lng.toFixed(6)}&travelmode=driving`;
+    let originQuery = "";
+    if (Array.isArray(userCurrentLocation) && userCurrentLocation.length >= 2) {
+      const originLat = Number(userCurrentLocation[0]);
+      const originLng = Number(userCurrentLocation[1]);
+
+      if (Number.isFinite(originLat) && Number.isFinite(originLng)) {
+        originQuery = `&origin=${originLat.toFixed(6)},${originLng.toFixed(6)}`;
+      }
+    }
+
+    return `https://www.google.com/maps/dir/?api=1${originQuery}&destination=${lat.toFixed(6)},${lng.toFixed(6)}&travelmode=driving`;
   }
 
   async handleResolveSosAlert(event) {
@@ -1539,6 +1568,89 @@ class GovernmentDashboard extends React.Component {
                 </tbody>
               </table>
             </div>
+
+            <div className='mt-4 grid grid-cols-1 md:grid-cols-2 gap-3'>
+              {evacuationCenters.map((center) => {
+                const capacity = Math.max(0, Number(center.capacity) || 0);
+                const current = Math.max(0, Number(center.current) || 0);
+                const availableSlots = Math.max(0, capacity - current);
+                const utilizationPercent =
+                  capacity > 0
+                    ? Math.min(100, Math.round((current / capacity) * 100))
+                    : 0;
+
+                return (
+                  <div
+                    key={`summary-card-${center.id}`}
+                    className='bg-slate-50 border border-slate-200 rounded-xl p-3'
+                  >
+                    <div className='flex items-start justify-between gap-2'>
+                      <div>
+                        <p className='text-xs font-black text-slate-800 uppercase leading-tight'>
+                          {center.name}
+                        </p>
+                        <p className='text-[10px] font-semibold text-slate-500 uppercase mt-0.5'>
+                          {center.location || "Unknown location"}
+                        </p>
+                      </div>
+                      <span
+                        className={`text-[10px] font-black px-2 py-1 rounded-full ${
+                          utilizationPercent >= 95
+                            ? "bg-red-100 text-red-700"
+                            : utilizationPercent >= 85
+                              ? "bg-orange-100 text-orange-700"
+                              : "bg-green-100 text-green-700"
+                        }`}
+                      >
+                        {utilizationPercent}%
+                      </span>
+                    </div>
+
+                    <div className='mt-2'>
+                      <div className='w-full bg-slate-200 h-2 rounded-full overflow-hidden'>
+                        <div
+                          className={`h-full ${this.getCapacityColor(current, Math.max(capacity, 1))}`}
+                          style={{ width: `${utilizationPercent}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className='mt-2 grid grid-cols-3 gap-2 text-center'>
+                      <div className='rounded-lg bg-white border border-slate-200 py-1.5'>
+                        <p className='text-[9px] font-bold text-slate-500 uppercase'>
+                          Capacity
+                        </p>
+                        <p className='text-sm font-black text-slate-700'>
+                          {capacity}
+                        </p>
+                      </div>
+                      <div className='rounded-lg bg-white border border-slate-200 py-1.5'>
+                        <p className='text-[9px] font-bold text-slate-500 uppercase'>
+                          Headcount
+                        </p>
+                        <p className='text-sm font-black text-slate-700'>
+                          {current}
+                        </p>
+                      </div>
+                      <div className='rounded-lg bg-white border border-slate-200 py-1.5'>
+                        <p className='text-[9px] font-bold text-slate-500 uppercase'>
+                          Slots
+                        </p>
+                        <p
+                          className={`text-sm font-black ${
+                            availableSlots <= 5
+                              ? "text-red-600"
+                              : "text-green-600"
+                          }`}
+                        >
+                          {availableSlots}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div className='xl:col-span-5 bg-white rounded-lg shadow-sm p-4 border border-gray-200'>
@@ -1774,7 +1886,7 @@ class GovernmentDashboard extends React.Component {
         />
 
         {/* Main Content */}
-        <div className='px-4 py-4 lg:px-6 lg:py-5'>
+        <div className='px-2 py-3 lg:px-3 lg:py-4'>
           <div className='w-full'>
             {/* Page Title */}
             <div className='mb-4'>

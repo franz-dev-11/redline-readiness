@@ -126,7 +126,7 @@ class FamilyLogin extends React.Component {
         <div className='flex flex-col justify-center items-center w-full md:w-1/2 bg-white px-8 py-12'>
           <div className='w-full max-w-sm mx-auto'>
             <div className='flex justify-center mb-8'>
-              <img src={logo} alt='Logo' className='h-8' />
+              <img src={logo} alt='Logo' className='h-16' />
             </div>
             <h1 className='text-3xl font-black text-[#3a4a5b] mb-2 text-center'>
               Welcome back!
@@ -206,7 +206,7 @@ class FamilyLogin extends React.Component {
             <img
               src={banner}
               alt='Login Illustration'
-              className='object-cover h-screen w-full grayscale'
+              className='object-cover h-screen w-full '
             />
           </div>
         </div>

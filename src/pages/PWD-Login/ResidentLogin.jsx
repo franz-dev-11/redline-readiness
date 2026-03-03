@@ -198,7 +198,7 @@ class ResidentLogin extends React.Component {
             <img
               src={banner}
               alt='Login Illustration'
-              className='object-cover h-screen w-full grayscale'
+              className='object-cover h-screen w-full '
             />
           </div>
         </div>

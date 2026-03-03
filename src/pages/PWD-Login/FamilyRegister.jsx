@@ -349,7 +349,7 @@ class FamilyRegister extends React.Component {
             <img
               src={banner}
               alt='Register Illustration'
-              className='object-cover h-screen w-full grayscale'
+              className='object-cover h-screen w-full '
             />
           </div>
         </div>

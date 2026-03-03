@@ -104,6 +104,13 @@ function parseCenterCapacityText(capacityText) {
   };
 }
 
+function normalizeCenterKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 function toLngLat(position) {
   if (!Array.isArray(position) || position.length < 2) return null;
   const lng = Number(position[0]);
@@ -169,8 +176,8 @@ class ResidentDashboard extends React.Component {
       name: "Sta. Maria Covered Court",
       address: "789 Poblacion St., Sta. Maria, Bulacan",
       position: [120.963, 14.821],
-      capacity: "79 / 120 Capacity",
-      percent: 65,
+      capacity: "0 / 0 Capacity",
+      percent: 0,
       tag: "Wheelchair Accessible",
       tagIcon: faWheelchair,
       blood: "B+",
@@ -181,12 +188,12 @@ class ResidentDashboard extends React.Component {
       name: "Cabayao Elementary School",
       address: "Cabayao St., Sta. Maria, Bulacan",
       position: [120.958, 14.815],
-      capacity: "97 / 100 Capacity",
-      percent: 97,
+      capacity: "0 / 0 Capacity",
+      percent: 0,
       tag: "PWD-Friendly",
       tagIcon: faUserGroup,
       blood: "B+",
-      isFull: true,
+      isFull: false,
     },
   ];
 
@@ -377,6 +384,7 @@ class ResidentDashboard extends React.Component {
       capacityRef,
       (snapshot) => {
         const updatesByCenterId = new Map();
+        const updatesByCenterName = new Map();
 
         snapshot.forEach((centerDoc) => {
           const data = centerDoc.data() || {};
@@ -388,20 +396,40 @@ class ResidentDashboard extends React.Component {
 
           updatesByCenterId.set(String(centerId), {
             centerId,
+            name: data.centerName || data.name || "",
             address: data.address,
             capacity: Number(data.capacity),
             headcount: Number(data.headcount),
           });
+
+          const nameKey = normalizeCenterKey(data.centerName || data.name);
+          if (nameKey) {
+            updatesByCenterName.set(
+              nameKey,
+              updatesByCenterId.get(String(centerId)),
+            );
+          }
         });
 
-        this.setState((prevState) => ({
-          evacuationCenters: prevState.evacuationCenters.map((center) => {
-            const update = updatesByCenterId.get(String(center.id));
-            if (!update) {
-              return center;
-            }
+        this.setState((prevState) => {
+          const centerTemplates = [
+            ...ResidentDashboard.EVACUATION_CENTERS,
+            ...prevState.evacuationCenters,
+          ];
+          const centersFromFirebase = [];
 
-            const fallback = parseCenterCapacityText(center.capacity);
+          updatesByCenterId.forEach((update) => {
+            const template =
+              centerTemplates.find(
+                (center) => String(center.id) === String(update.centerId),
+              ) ||
+              centerTemplates.find(
+                (center) =>
+                  normalizeCenterKey(center.name) ===
+                  normalizeCenterKey(update.name),
+              );
+
+            const fallback = parseCenterCapacityText(template?.capacity);
             const nextCapacity =
               Number.isFinite(update.capacity) && update.capacity > 0
                 ? Math.floor(update.capacity)
@@ -419,15 +447,27 @@ class ResidentDashboard extends React.Component {
                 ? Math.round((boundedHeadcount / nextCapacity) * 100)
                 : 0;
 
-            return {
-              ...center,
-              address: update.address || center.address,
+            centersFromFirebase.push({
+              id: update.centerId,
+              name: update.name || template?.name || "Evacuation Center",
+              address:
+                update.address || template?.address || "Unknown location",
+              position: Array.isArray(template?.position)
+                ? [...template.position]
+                : [...ORIGINAL_CENTER],
               capacity: `${boundedHeadcount} / ${nextCapacity} Capacity`,
               percent,
+              tag: template?.tag || "PWD-Friendly",
+              tagIcon: template?.tagIcon || faUserGroup,
+              blood: template?.blood || "N/A",
               isFull: nextCapacity > 0 && boundedHeadcount >= nextCapacity,
-            };
-          }),
-        }));
+            });
+          });
+
+          return {
+            evacuationCenters: centersFromFirebase,
+          };
+        });
       },
       (error) => {
         console.error(
@@ -1287,8 +1327,8 @@ class ResidentDashboard extends React.Component {
           }
         />
 
-        <div className='p-6'>
-          <div className='max-w-7xl mx-auto space-y-6'>
+        <div className='px-3 py-4 lg:px-4 lg:py-5'>
+          <div className='w-full space-y-6'>
             {activeTab !== "dashboard" ? (
               this.renderActiveTabPage()
             ) : (
@@ -1561,7 +1601,7 @@ class ResidentDashboard extends React.Component {
                               <button
                                 onClick={this.handleTriggerSosAndShare}
                                 disabled={isSosLocked}
-                                className='bg-red-600 text-white font-black py-2 rounded-xl text-[10px] hover:bg-red-700 uppercase tracking-wide transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-red-600'
+                                className='bg-red-600 text-white font-black py-2 rounded-xl text-[10px] hover:bg-red-700 uppercase tracking-wide transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-red-600 cursor-pointer'
                               >
                                 {isSosLocked
                                   ? "SOS Active (Resolve First)"

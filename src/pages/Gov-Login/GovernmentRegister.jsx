@@ -347,7 +347,7 @@ class GovernmentRegister extends React.Component {
             <img
               src={banner}
               alt='Government Register Illustration'
-              className='object-cover h-screen w-full grayscale'
+              className='object-cover h-screen w-full '
             />
           </div>
         </div>

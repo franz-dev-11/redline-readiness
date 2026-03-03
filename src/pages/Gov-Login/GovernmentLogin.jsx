@@ -219,7 +219,7 @@ class GovernmentLogin extends React.Component {
             <img
               src={banner}
               alt='Government Login Illustration'
-              className='object-cover h-screen w-full grayscale'
+              className='object-cover h-screen w-full '
             />
           </div>
         </div>

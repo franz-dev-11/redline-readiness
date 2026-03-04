@@ -14,3 +14,15 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+## Environment setup
+
+1. Copy `.env.example` to `.env`.
+2. Put your Firebase web config values in `.env`.
+3. Never commit `.env`.
+
+This project reads Firebase config from `VITE_FIREBASE_*` variables in `src/firebase.js`.
+
+## API key security
+
+If a Firebase API key was exposed, rotate it in Google Cloud Console and add API restrictions and application restrictions.

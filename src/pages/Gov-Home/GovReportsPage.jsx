@@ -32,6 +32,29 @@ function getAge(user) {
   return age >= 0 ? age : null;
 }
 
+function toNonNegativeNumber(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+
+  return Math.floor(parsed);
+}
+
+function hasPwdTag(person = {}) {
+  const pwdId = String(person?.pwdId || "").trim().toUpperCase();
+  if (pwdId && pwdId !== "N/A") {
+    return true;
+  }
+
+  if (person?.hasDisability === true) {
+    return true;
+  }
+
+  const disabilityType = String(person?.disabilityType || "").trim();
+  return Boolean(disabilityType);
+}
+
 function getEventDate(value) {
   if (!value) return null;
   if (value?.toDate) {
@@ -113,7 +136,14 @@ function GovReportsPage({
       },
       (error) => {
         console.error("Failed to load audit logs:", error);
-        setAuditLogsError("Unable to load access logs.");
+        const errorCode = String(error?.code || "").toLowerCase();
+        if (errorCode.includes("permission-denied")) {
+          setAuditLogsError(
+            "Access denied for access logs. Update Firestore rules to allow read access on scanLogs for government/admin accounts.",
+          );
+        } else {
+          setAuditLogsError("Unable to load access logs.");
+        }
         setAuditLogsLoading(false);
       },
     );
@@ -136,12 +166,13 @@ function GovReportsPage({
       pwd: 0,
       elderly: 0,
       child: 0,
+      family: 0,
       general: 0,
     };
 
-    residentUsers.forEach((user) => {
-      const age = getAge(user);
-      if (user?.pwdId && user.pwdId !== "N/A") {
+    const applySectorCount = (person = {}) => {
+      const age = getAge(person);
+      if (hasPwdTag(person)) {
         counts.pwd += 1;
       } else if (Number.isFinite(age) && age >= 60) {
         counts.elderly += 1;
@@ -149,6 +180,65 @@ function GovReportsPage({
         counts.child += 1;
       } else {
         counts.general += 1;
+      }
+    };
+
+    residentUsers.forEach((user) => {
+      const role = String(user?.role || "").toLowerCase();
+      const userType = String(user?.userType || "").toLowerCase();
+      const accountType = String(user?.accountType || "").toLowerCase();
+
+      const isFamilyAccount =
+        role === "family" ||
+        userType === "family" ||
+        accountType === "family" ||
+        accountType === "residential-family";
+
+      if (isFamilyAccount) {
+        counts.family += 1;
+
+        const familyProfile = user?.familyProfile || {};
+        const listedMembers =
+          Array.isArray(familyProfile.householdMembers) &&
+          familyProfile.householdMembers.length > 0
+            ? familyProfile.householdMembers
+            : Array.isArray(user?.dependents) && user.dependents.length > 0
+              ? user.dependents
+              : [];
+
+        if (listedMembers.length > 0) {
+          listedMembers.forEach((member) => applySectorCount(member));
+
+          const hasHeadInfo =
+            Boolean(String(familyProfile.householdHead || "").trim()) ||
+            Boolean(String(familyProfile.householdHeadDateOfBirth || "").trim()) ||
+            Boolean(String(familyProfile.householdHeadDisabilityType || "").trim());
+
+          if (hasHeadInfo) {
+            applySectorCount({
+              dateOfBirth: familyProfile.householdHeadDateOfBirth || "",
+              disabilityType: familyProfile.householdHeadDisabilityType || "",
+            });
+          }
+        } else {
+          const declaredPwd = toNonNegativeNumber(familyProfile.pwdMembers);
+          const declaredElderly = toNonNegativeNumber(familyProfile.elderlyMembers);
+          const declaredChild = toNonNegativeNumber(familyProfile.childMembers);
+          const declaredTotal = toNonNegativeNumber(familyProfile.totalMembers);
+          const declaredVulnerable = declaredPwd + declaredElderly + declaredChild;
+          const declaredGeneral = Math.max(0, declaredTotal - declaredVulnerable);
+
+          if (declaredTotal > 0) {
+            counts.pwd += declaredPwd;
+            counts.elderly += declaredElderly;
+            counts.child += declaredChild;
+            counts.general += declaredGeneral;
+          } else {
+            applySectorCount(user);
+          }
+        }
+      } else {
+        applySectorCount(user);
       }
     });
 
@@ -243,6 +333,7 @@ function GovReportsPage({
       ["PWD", sectorPopulation.pwd],
       ["Elderly", sectorPopulation.elderly],
       ["Child", sectorPopulation.child],
+      ["Family Account", sectorPopulation.family],
       ["General", sectorPopulation.general],
       [],
       ["SOS Report"],
@@ -305,6 +396,7 @@ function GovReportsPage({
           <tr><td>PWD</td><td>${sectorPopulation.pwd}</td></tr>
           <tr><td>Elderly</td><td>${sectorPopulation.elderly}</td></tr>
           <tr><td>Child</td><td>${sectorPopulation.child}</td></tr>
+          <tr><td>Family Account</td><td>${sectorPopulation.family}</td></tr>
           <tr><td>General</td><td>${sectorPopulation.general}</td></tr>
         </table>
 
@@ -433,6 +525,7 @@ function GovReportsPage({
               ["PWD", sectorPopulation.pwd],
               ["Elderly", sectorPopulation.elderly],
               ["Child", sectorPopulation.child],
+              ["Family Account", sectorPopulation.family],
               ["General", sectorPopulation.general],
             ].map(([label, count]) => (
               <div

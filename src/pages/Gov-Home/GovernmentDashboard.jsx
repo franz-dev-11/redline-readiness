@@ -1184,13 +1184,6 @@ class GovernmentDashboard extends React.Component {
                 >
                   Evacuation View
                 </button>
-                <button
-                  type='button'
-                  onClick={this.handleLocateUser}
-                  className='px-3 py-1.5 rounded-lg text-xs font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200'
-                >
-                  Locate Me
-                </button>
               </div>
             </div>
 
@@ -1567,89 +1560,6 @@ class GovernmentDashboard extends React.Component {
                   })}
                 </tbody>
               </table>
-            </div>
-
-            <div className='mt-4 grid grid-cols-1 md:grid-cols-2 gap-3'>
-              {evacuationCenters.map((center) => {
-                const capacity = Math.max(0, Number(center.capacity) || 0);
-                const current = Math.max(0, Number(center.current) || 0);
-                const availableSlots = Math.max(0, capacity - current);
-                const utilizationPercent =
-                  capacity > 0
-                    ? Math.min(100, Math.round((current / capacity) * 100))
-                    : 0;
-
-                return (
-                  <div
-                    key={`summary-card-${center.id}`}
-                    className='bg-slate-50 border border-slate-200 rounded-xl p-3'
-                  >
-                    <div className='flex items-start justify-between gap-2'>
-                      <div>
-                        <p className='text-xs font-black text-slate-800 uppercase leading-tight'>
-                          {center.name}
-                        </p>
-                        <p className='text-[10px] font-semibold text-slate-500 uppercase mt-0.5'>
-                          {center.location || "Unknown location"}
-                        </p>
-                      </div>
-                      <span
-                        className={`text-[10px] font-black px-2 py-1 rounded-full ${
-                          utilizationPercent >= 95
-                            ? "bg-red-100 text-red-700"
-                            : utilizationPercent >= 85
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-green-100 text-green-700"
-                        }`}
-                      >
-                        {utilizationPercent}%
-                      </span>
-                    </div>
-
-                    <div className='mt-2'>
-                      <div className='w-full bg-slate-200 h-2 rounded-full overflow-hidden'>
-                        <div
-                          className={`h-full ${this.getCapacityColor(current, Math.max(capacity, 1))}`}
-                          style={{ width: `${utilizationPercent}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className='mt-2 grid grid-cols-3 gap-2 text-center'>
-                      <div className='rounded-lg bg-white border border-slate-200 py-1.5'>
-                        <p className='text-[9px] font-bold text-slate-500 uppercase'>
-                          Capacity
-                        </p>
-                        <p className='text-sm font-black text-slate-700'>
-                          {capacity}
-                        </p>
-                      </div>
-                      <div className='rounded-lg bg-white border border-slate-200 py-1.5'>
-                        <p className='text-[9px] font-bold text-slate-500 uppercase'>
-                          Headcount
-                        </p>
-                        <p className='text-sm font-black text-slate-700'>
-                          {current}
-                        </p>
-                      </div>
-                      <div className='rounded-lg bg-white border border-slate-200 py-1.5'>
-                        <p className='text-[9px] font-bold text-slate-500 uppercase'>
-                          Slots
-                        </p>
-                        <p
-                          className={`text-sm font-black ${
-                            availableSlots <= 5
-                              ? "text-red-600"
-                              : "text-green-600"
-                          }`}
-                        >
-                          {availableSlots}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </div>
 

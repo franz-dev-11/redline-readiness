@@ -4,6 +4,7 @@ import LoginSelection from "./pages/LoginSelection/LoginSelection";
 import ResidentLogin from "./pages/PWD-Login/ResidentLogin";
 import FamilyLogin from "./pages/PWD-Login/FamilyLogin";
 import GovernmentLogin from "./pages/Gov-Login/GovernmentLogin";
+import GovernmentPendingApproval from "./pages/Gov-Login/GovernmentPendingApproval";
 import GovernmentRegister from "./pages/Gov-Login/GovernmentRegister";
 import ResidentRegister from "./pages/PWD-Login/ResidentRegister";
 import FamilyRegister from "./pages/PWD-Login/FamilyRegister";
@@ -116,8 +117,15 @@ class App extends React.Component {
             onBack={() => ViewManager.goToSelection()}
             onRegister={() => ViewManager.goToGovRegister()}
             onAdminLogin={() => ViewManager.goToAdminDashboard()}
+            onPendingApproval={() => ViewManager.goToGovPendingApproval()}
             onGovLogin={() => ViewManager.goToGovDashboard()}
           />,
+        );
+
+      case "gov-pending-approval":
+        return this.renderWithTransition(
+          "gov-pending-approval",
+          <GovernmentPendingApproval onBack={() => ViewManager.goToGovLogin()} />,
         );
 
       case "gov-register":

@@ -90,17 +90,26 @@ class GovernmentLogin extends React.Component {
 
       // Check if government account
       if (userData.role !== "government") {
+        await AuthService.logout();
         throw new Error("This login is only for government accounts");
       }
 
       // Check account status
       if (userData.status === "pending") {
+        await AuthService.logout();
+
+        if (this.props.onPendingApproval) {
+          this.props.onPendingApproval();
+          return;
+        }
+
         throw new Error(
           "Your account is pending approval. Please wait for administrator verification.",
         );
       }
 
       if (userData.status === "rejected") {
+        await AuthService.logout();
         throw new Error(
           "Your account registration was rejected. Please contact administrator.",
         );

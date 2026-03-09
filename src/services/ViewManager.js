@@ -10,6 +10,7 @@ class ViewManager {
       INDIVIDUAL_LOGIN: "individual-login",
       FAMILY_LOGIN: "family-login",
       GOV_LOGIN: "gov-login",
+      GOV_PENDING_APPROVAL: "gov-pending-approval",
       GOV_REGISTER: "gov-register",
       INDIVIDUAL_REGISTER: "individual-register",
       FAMILY_REGISTER: "family-register",
@@ -75,6 +76,13 @@ class ViewManager {
    */
   goToGovLogin() {
     this.navigateTo(this.views.GOV_LOGIN);
+  }
+
+  /**
+   * Go to government pending approval page
+   */
+  goToGovPendingApproval() {
+    this.navigateTo(this.views.GOV_PENDING_APPROVAL);
   }
 
   /**

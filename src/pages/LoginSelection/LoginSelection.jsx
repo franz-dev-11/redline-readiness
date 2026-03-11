@@ -1,11 +1,15 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faWheelchair,
   faUser,
   faBuildingColumns,
   faArrowLeft,
   faUsers,
+  faWheelchair,
+  faPersonPregnant,
+  faPersonCane,
+  faPerson,
+  faPersonDress,
 } from "@fortawesome/free-solid-svg-icons";
 
 const LoginSelection = ({
@@ -15,6 +19,26 @@ const LoginSelection = ({
   onBack,
 }) => {
   const isResidentAuthMode = Boolean(residentAuthMode);
+  const rotatingResidentIcons = [
+    faWheelchair,
+    faPersonPregnant,
+    faPersonCane,
+    faPerson,
+    faPersonDress,
+  ];
+  const [residentIconIndex, setResidentIconIndex] = useState(0);
+
+  useEffect(() => {
+    if (isResidentAuthMode) return;
+
+    const intervalId = setInterval(() => {
+      setResidentIconIndex(
+        (prevIndex) => (prevIndex + 1) % rotatingResidentIcons.length,
+      );
+    }, 1800);
+
+    return () => clearInterval(intervalId);
+  }, [isResidentAuthMode, rotatingResidentIcons.length]);
 
   return (
     <div className='min-h-screen bg-[#f1f5f9] flex flex-col font-sans selection:bg-red-100'>
@@ -62,17 +86,21 @@ const LoginSelection = ({
             <div className='flex flex-col items-center relative z-10'>
               <div className='w-24 h-24 bg-blue-600 rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-blue-200 group-hover:rotate-6  transition-transform'>
                 <FontAwesomeIcon
-                  icon={isResidentAuthMode ? faUser : faWheelchair}
+                  icon={
+                    isResidentAuthMode
+                      ? faUser
+                      : rotatingResidentIcons[residentIconIndex]
+                  }
                   className='text-white text-4xl'
                 />
               </div>
               <h3 className='text-2xl font-extrabold text-slate-800 mb-3 tracking-tight'>
-                {isResidentAuthMode ? "Individual" : "Resident / PWD"}
+                {isResidentAuthMode ? "Individual" : "Resident"}
               </h3>
               <p className='text-slate-500 text-center leading-relaxed font-medium'>
                 {isResidentAuthMode
                   ? "Manage your personal information and emergency settings."
-                  : "Dedicated tools for PWDs, caregivers, and household members."}
+                  : "Dedicated tools for residents, PWDs, caregivers, and household members."}
               </p>
             </div>
           </button>

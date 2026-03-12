@@ -16,6 +16,7 @@ import SetupFamilyProfile from "./pages/Profile/SetupFamilyProfile";
 import ViewProfile from "./pages/Profile/ViewProfile";
 import ViewManager from "./services/ViewManager";
 import PageTransition from "./components/PageTransition";
+import VoiceAssistant from "./components/VoiceAssistant";
 
 /**
  * App - Main application component (OOP Class-based)
@@ -125,7 +126,9 @@ class App extends React.Component {
       case "gov-pending-approval":
         return this.renderWithTransition(
           "gov-pending-approval",
-          <GovernmentPendingApproval onBack={() => ViewManager.goToGovLogin()} />,
+          <GovernmentPendingApproval
+            onBack={() => ViewManager.goToGovLogin()}
+          />,
         );
 
       case "gov-register":
@@ -214,6 +217,7 @@ class App extends React.Component {
         <AnimatePresence mode='sync' initial={false}>
           {this.renderView()}
         </AnimatePresence>
+        <VoiceAssistant />
       </div>
     );
   }

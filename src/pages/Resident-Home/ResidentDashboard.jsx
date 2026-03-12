@@ -291,6 +291,13 @@ class ResidentDashboard extends React.Component {
     this.startUserProfileListener();
     this.startEmergencyFeedListener();
     this.startEvacuationCapacityListener();
+
+    // Voice assistant: listen for tab-change events dispatched by VoiceAssistant
+    this._handleVoiceTabChange = (event) => {
+      const tab = event?.detail?.tab;
+      if (tab) this.handleTabChange(tab);
+    };
+    window.addEventListener("voiceTabChange", this._handleVoiceTabChange);
     this.lastUpdatedTimer = setInterval(() => {
       const now = new Date();
       this.setState((prevState) => {
@@ -337,6 +344,9 @@ class ResidentDashboard extends React.Component {
   componentWillUnmount() {
     if (this.lastUpdatedTimer) {
       clearInterval(this.lastUpdatedTimer);
+    }
+    if (this._handleVoiceTabChange) {
+      window.removeEventListener("voiceTabChange", this._handleVoiceTabChange);
     }
     if (this.emergencyFeedUnsubscribe) {
       this.emergencyFeedUnsubscribe();

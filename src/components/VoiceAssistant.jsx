@@ -52,23 +52,26 @@ function buildHelpSpeech(commands) {
     "Stop voice assistant",
   ]);
 
-  const spokenPhrases = [];
+  const spokenLabels = [];
   const seenLabels = new Set();
 
   commands.forEach((command) => {
-    if (nonNavigationLabels.has(command.label) || seenLabels.has(command.label)) {
+    if (
+      nonNavigationLabels.has(command.label) ||
+      seenLabels.has(command.label)
+    ) {
       return;
     }
 
     seenLabels.add(command.label);
-    spokenPhrases.push(command.phrase);
+    spokenLabels.push(command.label.toLowerCase());
   });
 
-  if (spokenPhrases.length === 0) {
+  if (spokenLabels.length === 0) {
     return "There are no navigation commands available on this page.";
   }
 
-  return `Available navigation commands are: ${spokenPhrases.join(", ")}.`;
+  return `Available navigation options are: ${spokenLabels.join(", ")}.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +81,79 @@ function buildCommandsForView(view) {
   const speak = (text) => VoiceCommandService.speak(text, true);
   let getCurrentCommandsForHelp = () => [];
 
-  const globalCommands = [
+  const commonCommands = [
+    {
+      phrase: "go back",
+      label: "Go back",
+      action: () => {
+        const backRoutes = {
+          "resident-auth-selection": () => ViewManager.goToSelection(),
+          "individual-login": () => ViewManager.goToResidentLogin(),
+          "family-login": () => ViewManager.goToResidentLogin(),
+          "gov-login": () => ViewManager.goToSelection(),
+          "gov-register": () => ViewManager.goToGovLogin(),
+          "gov-pending-approval": () => ViewManager.goToGovLogin(),
+          "individual-register": () => ViewManager.goToIndividualLogin(),
+          "family-register": () => ViewManager.goToFamilyLogin(),
+          "setup-profile": () => ViewManager.goToHome(),
+          "family-setup-profile": () => ViewManager.goToHome(),
+          "view-profile": () => ViewManager.goToHome(),
+          "gov-dashboard": () => ViewManager.goToSelection(),
+          "admin-dashboard": () => ViewManager.goToSelection(),
+        };
+
+        const navigateBack = backRoutes[view];
+        if (navigateBack) {
+          navigateBack();
+          speak("Going back.");
+          return;
+        }
+
+        speak("There is no back action available on this page.");
+      },
+    },
+    {
+      phrase: "read page",
+      label: "Read page description",
+      action: () => {
+        speak(PAGE_DESCRIPTIONS[view] || "You are on the current page.");
+      },
+    },
+    {
+      phrase: "describe page",
+      label: "Describe current page",
+      action: () => {
+        speak(PAGE_DESCRIPTIONS[view] || "You are on the current page.");
+      },
+    },
+    {
+      phrase: "what page am i on",
+      label: "Describe current page",
+      action: () => {
+        speak(PAGE_DESCRIPTIONS[view] || "You are on the current page.");
+      },
+    },
+    {
+      phrase: "help",
+      label: "Show available commands",
+      action: () => {
+        speak(buildHelpSpeech(getCurrentCommandsForHelp()));
+        window.dispatchEvent(new CustomEvent("voiceShowHelp"));
+      },
+    },
+    {
+      phrase: "stop listening",
+      label: "Stop voice assistant",
+      action: () => {
+        VoiceCommandService.stop();
+        VoiceCommandService.speak(
+          "Voice assistant stopped. Press the microphone button to restart.",
+        );
+      },
+    },
+  ];
+
+  const publicNavigationCommands = [
     {
       phrase: "go to main menu",
       label: "Go to main menu",
@@ -151,6 +226,9 @@ function buildCommandsForView(view) {
         speak("Opening family login.");
       },
     },
+  ];
+
+  const authenticatedNavigationCommands = [
     {
       phrase: "resident dashboard",
       label: "Open Resident dashboard",
@@ -199,76 +277,24 @@ function buildCommandsForView(view) {
         speak("Opening family profile setup.");
       },
     },
-    {
-      phrase: "go back",
-      label: "Go back",
-      action: () => {
-        const backRoutes = {
-          "resident-auth-selection": () => ViewManager.goToSelection(),
-          "individual-login": () => ViewManager.goToResidentLogin(),
-          "family-login": () => ViewManager.goToResidentLogin(),
-          "gov-login": () => ViewManager.goToSelection(),
-          "gov-register": () => ViewManager.goToGovLogin(),
-          "gov-pending-approval": () => ViewManager.goToGovLogin(),
-          "individual-register": () => ViewManager.goToIndividualLogin(),
-          "family-register": () => ViewManager.goToFamilyLogin(),
-          "setup-profile": () => ViewManager.goToHome(),
-          "family-setup-profile": () => ViewManager.goToHome(),
-          "view-profile": () => ViewManager.goToHome(),
-          "gov-dashboard": () => ViewManager.goToSelection(),
-          "admin-dashboard": () => ViewManager.goToSelection(),
-        };
-
-        const navigateBack = backRoutes[view];
-        if (navigateBack) {
-          navigateBack();
-          speak("Going back.");
-          return;
-        }
-
-        speak("There is no back action available on this page.");
-      },
-    },
-    {
-      phrase: "read page",
-      label: "Read page description",
-      action: () => {
-        speak(PAGE_DESCRIPTIONS[view] || "You are on the current page.");
-      },
-    },
-    {
-      phrase: "describe page",
-      label: "Describe current page",
-      action: () => {
-        speak(PAGE_DESCRIPTIONS[view] || "You are on the current page.");
-      },
-    },
-    {
-      phrase: "what page am i on",
-      label: "Describe current page",
-      action: () => {
-        speak(PAGE_DESCRIPTIONS[view] || "You are on the current page.");
-      },
-    },
-    {
-      phrase: "help",
-      label: "Show available commands",
-      action: () => {
-        speak(buildHelpSpeech(getCurrentCommandsForHelp()));
-        window.dispatchEvent(new CustomEvent("voiceShowHelp"));
-      },
-    },
-    {
-      phrase: "stop listening",
-      label: "Stop voice assistant",
-      action: () => {
-        VoiceCommandService.stop();
-        VoiceCommandService.speak(
-          "Voice assistant stopped. Press the microphone button to restart.",
-        );
-      },
-    },
   ];
+
+  const authenticatedViews = new Set([
+    "home",
+    "setup-profile",
+    "family-setup-profile",
+    "view-profile",
+    "gov-dashboard",
+    "admin-dashboard",
+  ]);
+
+  const activeGlobalCommands = authenticatedViews.has(view)
+    ? [
+        ...publicNavigationCommands,
+        ...authenticatedNavigationCommands,
+        ...commonCommands,
+      ]
+    : [...publicNavigationCommands, ...commonCommands];
 
   const viewCommands = {
     selection: [
@@ -806,10 +832,10 @@ function buildCommandsForView(view) {
 
   getCurrentCommandsForHelp = () => [
     ...(viewCommands[view] || []),
-    ...globalCommands,
+    ...activeGlobalCommands,
   ];
 
-  return [...(viewCommands[view] || []), ...globalCommands];
+  return [...(viewCommands[view] || []), ...activeGlobalCommands];
 }
 
 // ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ class VoiceCommandService {
     // When TTS is playing we suppress command matching (mic stays open).
     // This avoids the stop/start race that caused recognition to go silent.
     this._suppressCommands = false;
+    this._ignoreCommandsUntil = 0;
     this._restartTimer = null;
     this._commands = [];
     this._statusListeners = [];
@@ -81,6 +82,10 @@ class VoiceCommandService {
    * @param {string} transcript
    */
   _processCommand(transcript) {
+    if (this._suppressCommands || Date.now() < this._ignoreCommandsUntil) {
+      return;
+    }
+
     let bestMatch = null;
     let bestScore = 0;
 
@@ -96,9 +101,7 @@ class VoiceCommandService {
 
     if (bestMatch) {
       this._notifyStatus({ type: "command-matched" });
-      if (!this._suppressCommands) {
-        bestMatch();
-      }
+      bestMatch();
     }
   }
 
@@ -118,6 +121,7 @@ class VoiceCommandService {
     if (!this._supported || this._isListening) return;
     this._isListening = true;
     this._suppressCommands = false;
+    this._ignoreCommandsUntil = 0;
     try {
       this._recognition.start();
     } catch { /* already started */ }
@@ -129,6 +133,7 @@ class VoiceCommandService {
     if (!this._supported) return;
     this._isListening = false;
     this._suppressCommands = false;
+    this._ignoreCommandsUntil = 0;
     if (this._restartTimer) {
       clearTimeout(this._restartTimer);
       this._restartTimer = null;
@@ -158,11 +163,16 @@ class VoiceCommandService {
     this._suppressCommands = true;
 
     utterance.onend = () => {
-      // Short buffer after speech ends before accepting commands again
-      setTimeout(() => { this._suppressCommands = false; }, 400);
+      // Keep ignoring commands briefly after TTS to avoid matching the tail
+      // end of our own spoken audio.
+      this._ignoreCommandsUntil = Date.now() + 1800;
+      setTimeout(() => {
+        this._suppressCommands = false;
+      }, 400);
     };
     utterance.onerror = () => {
       this._suppressCommands = false;
+      this._ignoreCommandsUntil = 0;
     };
 
     this._synthesis.speak(utterance);

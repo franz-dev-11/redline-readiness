@@ -796,6 +796,222 @@ function buildCommandsForView(view) {
         },
       },
       {
+        phrase: "set disaster type to flood",
+        label: "Choose flood as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "flood" },
+            }),
+          );
+          speak("SOS disaster type set to flood.");
+        },
+      },
+      {
+        phrase: "flood sos",
+        label: "Choose flood as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "flood" },
+            }),
+          );
+          speak("SOS disaster type set to flood.");
+        },
+      },
+      {
+        phrase: "set disaster type to earthquake",
+        label: "Choose earthquake as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "earthquake" },
+            }),
+          );
+          speak("SOS disaster type set to earthquake.");
+        },
+      },
+      {
+        phrase: "earthquake sos",
+        label: "Choose earthquake as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "earthquake" },
+            }),
+          );
+          speak("SOS disaster type set to earthquake.");
+        },
+      },
+      {
+        phrase: "set disaster type to fire",
+        label: "Choose fire as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "fire" },
+            }),
+          );
+          speak("SOS disaster type set to fire.");
+        },
+      },
+      {
+        phrase: "fire sos",
+        label: "Choose fire as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "fire" },
+            }),
+          );
+          speak("SOS disaster type set to fire.");
+        },
+      },
+      {
+        phrase: "set disaster type to landslide",
+        label: "Choose landslide as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "landslide" },
+            }),
+          );
+          speak("SOS disaster type set to landslide.");
+        },
+      },
+      {
+        phrase: "landslide sos",
+        label: "Choose landslide as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "landslide" },
+            }),
+          );
+          speak("SOS disaster type set to landslide.");
+        },
+      },
+      {
+        phrase: "set disaster type to typhoon",
+        label: "Choose typhoon as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "typhoon" },
+            }),
+          );
+          speak("SOS disaster type set to typhoon.");
+        },
+      },
+      {
+        phrase: "typhoon sos",
+        label: "Choose typhoon as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "typhoon" },
+            }),
+          );
+          speak("SOS disaster type set to typhoon.");
+        },
+      },
+      {
+        phrase: "set disaster type to medical",
+        label: "Choose medical emergency as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "medical" },
+            }),
+          );
+          speak("SOS disaster type set to medical emergency.");
+        },
+      },
+      {
+        phrase: "medical sos",
+        label: "Choose medical emergency as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "medical" },
+            }),
+          );
+          speak("SOS disaster type set to medical emergency.");
+        },
+      },
+      {
+        phrase: "set disaster type to other",
+        label: "Choose other as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "other" },
+            }),
+          );
+          speak("SOS disaster type set to other.");
+        },
+      },
+      {
+        phrase: "other sos",
+        label: "Choose other as SOS type",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceSosDisasterTypeChange", {
+              detail: { disasterType: "other" },
+            }),
+          );
+          speak("SOS disaster type set to other.");
+        },
+      },
+      {
+        phrase: "trigger sos",
+        label: "Send SOS alert",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceTriggerSos", {
+              detail: { shareLocation: false },
+            }),
+          );
+          speak("Triggering SOS alert.");
+        },
+      },
+      {
+        phrase: "send sos",
+        label: "Send SOS alert",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceTriggerSos", {
+              detail: { shareLocation: false },
+            }),
+          );
+          speak("Triggering SOS alert.");
+        },
+      },
+      {
+        phrase: "trigger sos and share",
+        label: "Send SOS and share location",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceTriggerSos", {
+              detail: { shareLocation: true },
+            }),
+          );
+          speak("Triggering SOS and starting location share.");
+        },
+      },
+      {
+        phrase: "send sos and share",
+        label: "Send SOS and share location",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceTriggerSos", {
+              detail: { shareLocation: true },
+            }),
+          );
+          speak("Triggering SOS and starting location share.");
+        },
+      },
+      {
         phrase: "view profile",
         label: "View profile",
         action: () => {

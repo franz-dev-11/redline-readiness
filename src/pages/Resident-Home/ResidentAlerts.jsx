@@ -15,6 +15,40 @@ import EmergencyEventService from "../../services/EmergencyEventService";
 
 const LOW_ACCURACY_THRESHOLD_METERS = 100;
 
+const SOS_DISASTER_TYPE_OPTIONS = [
+  { value: "flood", label: "Flood" },
+  { value: "earthquake", label: "Earthquake" },
+  { value: "fire", label: "Fire" },
+  { value: "landslide", label: "Landslide" },
+  { value: "typhoon", label: "Typhoon" },
+  { value: "medical", label: "Medical Emergency" },
+  { value: "other", label: "Other" },
+];
+
+function getDisasterTypeLabel(disasterType) {
+  const normalized = String(disasterType || "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) {
+    return "General Emergency";
+  }
+
+  const knownType = SOS_DISASTER_TYPE_OPTIONS.find(
+    (option) => option.value === normalized,
+  );
+
+  if (knownType) {
+    return knownType.label;
+  }
+
+  return normalized
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
 function isSecureGeolocationContext() {
   if (typeof window === "undefined") {
     return false;
@@ -43,6 +77,7 @@ class ResidentAlerts extends React.Component {
       locationLabel: "Location unavailable",
       disabilityType: "Not specified",
       medicalNeeds: "Not specified",
+      selectedSosDisasterType: "flood",
       sosTriggeredAt: null,
       emergencyEvents: [],
     };
@@ -62,6 +97,7 @@ class ResidentAlerts extends React.Component {
     this.getTypeLabel = this.getTypeLabel.bind(this);
     this.handleResolveAlert = this.handleResolveAlert.bind(this);
     this.getResolvedSourceIds = this.getResolvedSourceIds.bind(this);
+    this.handleSosDisasterTypeChange = this.handleSosDisasterTypeChange.bind(this);
   }
 
   componentDidMount() {
@@ -268,7 +304,13 @@ class ResidentAlerts extends React.Component {
   }
 
   async handleTriggerSOS() {
-    const { sendingSos, userName, disabilityType, medicalNeeds } = this.state;
+    const {
+      sendingSos,
+      userName,
+      disabilityType,
+      medicalNeeds,
+      selectedSosDisasterType,
+    } = this.state;
     const currentUser = auth.currentUser;
 
     if (sendingSos || !currentUser) return;
@@ -296,10 +338,16 @@ class ResidentAlerts extends React.Component {
         Number.isFinite(lat) && Number.isFinite(lng)
           ? `${lat.toFixed(6)}, ${lng.toFixed(6)}`
           : locationLabel;
+      const disasterType = String(selectedSosDisasterType || "")
+        .trim()
+        .toLowerCase();
+      const disasterTypeLabel = getDisasterTypeLabel(disasterType);
 
       await EmergencyEventService.createSosEvent({
         userId: currentUser.uid,
         userName,
+        disasterType,
+        disasterTypeLabel,
         locationLabel: coordinateLabel,
         disabilityType,
         medicalNeeds,
@@ -401,6 +449,11 @@ class ResidentAlerts extends React.Component {
           id: event.id,
           type: event.type,
           typeLabel: this.getTypeLabel(event.type),
+          disasterTypeLabel:
+            event.type === "sos"
+              ? event.disasterTypeLabel ||
+                getDisasterTypeLabel(event.disasterType)
+              : "",
           dateTime: this.formatDateTime(event.createdAt),
           status,
           canResolve:
@@ -409,6 +462,14 @@ class ResidentAlerts extends React.Component {
             (event.type === "sos" || event.type === "location-share"),
         };
       });
+  }
+
+  handleSosDisasterTypeChange(event) {
+    this.setState({
+      selectedSosDisasterType: String(event?.target?.value || "")
+        .trim()
+        .toLowerCase(),
+    });
   }
 
   async handleResolveAlert(alertItem) {
@@ -446,6 +507,7 @@ class ResidentAlerts extends React.Component {
       locationLabel,
       disabilityType,
       medicalNeeds,
+      selectedSosDisasterType,
       sosTriggeredAt,
     } = this.state;
 
@@ -467,6 +529,7 @@ class ResidentAlerts extends React.Component {
         <p className='text-xs font-black text-slate-700 uppercase flex items-center gap-2'>
           <FontAwesomeIcon icon={faClockRotateLeft} /> Alert type:{" "}
           {item.typeLabel}
+          {item.disasterTypeLabel ? ` (${item.disasterTypeLabel})` : ""}
         </p>
         <p className='text-xs font-bold text-slate-500 uppercase'>
           Date/time: {item.dateTime}
@@ -520,6 +583,27 @@ class ResidentAlerts extends React.Component {
             </p>
           </div>
 
+          <div className='mt-4 max-w-sm'>
+            <label
+              htmlFor='alerts-sos-disaster-type'
+              className='block text-xs font-black text-slate-700 uppercase mb-1'
+            >
+              SOS Disaster Type
+            </label>
+            <select
+              id='alerts-sos-disaster-type'
+              value={selectedSosDisasterType}
+              onChange={this.handleSosDisasterTypeChange}
+              className='w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200'
+            >
+              {SOS_DISASTER_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className='mt-4 flex items-center gap-3'>
             <button
               onClick={this.handleTriggerSOS}
@@ -563,28 +647,41 @@ class ResidentAlerts extends React.Component {
                 No announcements posted yet.
               </p>
             ) : (
-              announcements.map((announcement) => (
-                <div
-                  key={announcement.id}
-                  className='border border-blue-200 bg-blue-50 rounded-xl p-4'
-                >
-                  <p className='text-xs font-black text-blue-700 uppercase flex items-center gap-2'>
-                    <FontAwesomeIcon icon={faBullhorn} />
-                    {announcement.alertTitle || "Emergency Alert"}
-                  </p>
-                  <p className='text-sm font-semibold text-slate-700 mt-1'>
-                    {announcement.message ||
-                      announcement.description ||
-                      "No description provided."}
-                  </p>
-                  <div className='mt-2 text-[11px] font-bold text-slate-500 uppercase flex items-center gap-3'>
-                    <span>
-                      Timestamp: {this.formatDateTime(announcement.createdAt)}
-                    </span>
-                    <span>LGU Source: {announcement.userName || "LGU"}</span>
+              announcements.map((announcement) => {
+                const announcementDisasterType =
+                  announcement.disasterTypeLabel ||
+                  (announcement.disasterType
+                    ? getDisasterTypeLabel(announcement.disasterType)
+                    : "");
+
+                return (
+                  <div
+                    key={announcement.id}
+                    className='border border-blue-200 bg-blue-50 rounded-xl p-4'
+                  >
+                    <p className='text-xs font-black text-blue-700 uppercase flex items-center gap-2'>
+                      <FontAwesomeIcon icon={faBullhorn} />
+                      {announcement.alertTitle || "Emergency Alert"}
+                    </p>
+                    <p className='text-sm font-semibold text-slate-700 mt-1'>
+                      {announcement.message ||
+                        announcement.description ||
+                        "No description provided."}
+                    </p>
+                    {announcementDisasterType && (
+                      <p className='text-[11px] font-black text-red-600 uppercase mt-2'>
+                        Disaster type: {announcementDisasterType}
+                      </p>
+                    )}
+                    <div className='mt-2 text-[11px] font-bold text-slate-500 uppercase flex items-center gap-3'>
+                      <span>
+                        Timestamp: {this.formatDateTime(announcement.createdAt)}
+                      </span>
+                      <span>LGU Source: {announcement.userName || "LGU"}</span>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -606,22 +703,35 @@ class ResidentAlerts extends React.Component {
                 </p>
               </div>
             ) : (
-              evacuationUpdates.map((update) => (
-                <div
-                  key={update.id}
-                  className='border border-amber-200 bg-amber-50 rounded-xl p-4'
-                >
-                  <p className='text-xs font-black text-amber-700 uppercase flex items-center gap-2'>
-                    <FontAwesomeIcon icon={faHouseFloodWater} /> Capacity Update
-                  </p>
-                  <p className='text-sm font-semibold text-slate-700 mt-1'>
-                    Center name: {update.centerName || "Unspecified Center"}
-                  </p>
-                  <p className='text-sm font-semibold text-slate-700'>
-                    Updated slots: {update.updatedSlots || "Not provided"}
-                  </p>
-                </div>
-              ))
+              evacuationUpdates.map((update) => {
+                const updateDisasterType =
+                  update.disasterTypeLabel ||
+                  (update.disasterType
+                    ? getDisasterTypeLabel(update.disasterType)
+                    : "");
+
+                return (
+                  <div
+                    key={update.id}
+                    className='border border-amber-200 bg-amber-50 rounded-xl p-4'
+                  >
+                    <p className='text-xs font-black text-amber-700 uppercase flex items-center gap-2'>
+                      <FontAwesomeIcon icon={faHouseFloodWater} /> Capacity Update
+                    </p>
+                    <p className='text-sm font-semibold text-slate-700 mt-1'>
+                      Center name: {update.centerName || "Unspecified Center"}
+                    </p>
+                    <p className='text-sm font-semibold text-slate-700'>
+                      Updated slots: {update.updatedSlots || "Not provided"}
+                    </p>
+                    {updateDisasterType && (
+                      <p className='text-[11px] font-black text-red-600 uppercase mt-2'>
+                        Disaster type: {updateDisasterType}
+                      </p>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

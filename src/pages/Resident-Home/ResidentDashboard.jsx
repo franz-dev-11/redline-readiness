@@ -55,6 +55,16 @@ const GEOLOCATION_POSITION_OPTIONS = {
 
 const LOW_ACCURACY_THRESHOLD_METERS = 100;
 
+const SOS_DISASTER_TYPE_OPTIONS = [
+  { value: "flood", label: "Flood" },
+  { value: "earthquake", label: "Earthquake" },
+  { value: "fire", label: "Fire" },
+  { value: "landslide", label: "Landslide" },
+  { value: "typhoon", label: "Typhoon" },
+  { value: "medical", label: "Medical Emergency" },
+  { value: "other", label: "Other" },
+];
+
 const MAP_STYLE = {
   version: 8,
   sources: {
@@ -135,6 +145,29 @@ function isSecureGeolocationContext() {
   );
 }
 
+function getDisasterTypeLabel(disasterType) {
+  const normalized = String(disasterType || "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) {
+    return "General Emergency";
+  }
+
+  const knownType = SOS_DISASTER_TYPE_OPTIONS.find(
+    (option) => option.value === normalized,
+  );
+  if (knownType) {
+    return knownType.label;
+  }
+
+  return normalized
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
 function renderCenterPin(isFull, mini = false) {
   const size = mini ? 20 : 26;
   const bgColor = isFull ? "#dc2626" : "#2563eb";
@@ -213,6 +246,7 @@ class ResidentDashboard extends React.Component {
       currentTime: new Date(),
       lastUpdatedAt: new Date(),
       sosTriggeredAt: null,
+      selectedSosDisasterType: "flood",
       isSharingLocation: false,
       locationShareStartedAt: null,
       locationShareEndsAt: null,
@@ -271,6 +305,8 @@ class ResidentDashboard extends React.Component {
       this.hasActiveSosForCurrentUser.bind(this);
     this.handleTriggerSOS = this.handleTriggerSOS.bind(this);
     this.handleTriggerSosAndShare = this.handleTriggerSosAndShare.bind(this);
+    this.setSosDisasterType = this.setSosDisasterType.bind(this);
+    this.handleSosDisasterTypeChange = this.handleSosDisasterTypeChange.bind(this);
     this.confirmLowAccuracyProceed = this.confirmLowAccuracyProceed.bind(this);
     this.resolveLocationLabelFromCoordinates =
       this.resolveLocationLabelFromCoordinates.bind(this);
@@ -298,6 +334,29 @@ class ResidentDashboard extends React.Component {
       if (tab) this.handleTabChange(tab);
     };
     window.addEventListener("voiceTabChange", this._handleVoiceTabChange);
+
+    this._handleVoiceSosDisasterTypeChange = (event) => {
+      const disasterType = String(event?.detail?.disasterType || "")
+        .trim()
+        .toLowerCase();
+      if (!disasterType) return;
+      this.setSosDisasterType(disasterType);
+    };
+    window.addEventListener(
+      "voiceSosDisasterTypeChange",
+      this._handleVoiceSosDisasterTypeChange,
+    );
+
+    this._handleVoiceTriggerSos = async (event) => {
+      const shouldShareLocation = Boolean(event?.detail?.shareLocation);
+      if (shouldShareLocation) {
+        await this.handleTriggerSosAndShare();
+        return;
+      }
+
+      await this.handleTriggerSOS();
+    };
+    window.addEventListener("voiceTriggerSos", this._handleVoiceTriggerSos);
     this.lastUpdatedTimer = setInterval(() => {
       const now = new Date();
       this.setState((prevState) => {
@@ -347,6 +406,15 @@ class ResidentDashboard extends React.Component {
     }
     if (this._handleVoiceTabChange) {
       window.removeEventListener("voiceTabChange", this._handleVoiceTabChange);
+    }
+    if (this._handleVoiceSosDisasterTypeChange) {
+      window.removeEventListener(
+        "voiceSosDisasterTypeChange",
+        this._handleVoiceSosDisasterTypeChange,
+      );
+    }
+    if (this._handleVoiceTriggerSos) {
+      window.removeEventListener("voiceTriggerSos", this._handleVoiceTriggerSos);
     }
     if (this.emergencyFeedUnsubscribe) {
       this.emergencyFeedUnsubscribe();
@@ -756,6 +824,7 @@ class ResidentDashboard extends React.Component {
       notifications,
       emergencyEvents,
       sosTriggeredAt,
+      selectedSosDisasterType,
       isSharingLocation,
       locationShareEndsAt,
       currentTime,
@@ -764,11 +833,12 @@ class ResidentDashboard extends React.Component {
     const dynamicItems = [];
 
     if (sosTriggeredAt) {
+      const activeSosDisasterType = getDisasterTypeLabel(selectedSosDisasterType);
       dynamicItems.push({
         id: "sos-live",
         type: "sos",
         title: "SOS Alert",
-        description: `Triggered at ${this.getSosTimestampLabel()}.`,
+        description: `Triggered at ${this.getSosTimestampLabel()} for ${activeSosDisasterType}.`,
       });
     }
 
@@ -789,21 +859,29 @@ class ResidentDashboard extends React.Component {
 
     const feedItems = emergencyEvents.map((event) => {
       if (event.type === "announcement") {
+        const announcementDisasterType =
+          event.disasterTypeLabel ||
+          (event.disasterType
+            ? getDisasterTypeLabel(event.disasterType)
+            : "");
         return {
           id: `feed-${event.id}`,
           type: "announcement",
           title: "LGU Announcement",
           description: event.message || "Official local government update.",
+          disasterTypeLabel: announcementDisasterType,
           meta: this.getEventTimeLabel(event),
         };
       }
 
       if (event.type === "sos") {
+        const eventDisasterType =
+          event.disasterTypeLabel || getDisasterTypeLabel(event.disasterType);
         return {
           id: `feed-${event.id}`,
           type: "sos",
           title: "SOS Alert",
-          description: `${event.userName || "Resident"} triggered SOS at ${event.locationLabel || "Pinned location"}.`,
+          description: `${event.userName || "Resident"} triggered ${eventDisasterType} SOS at ${event.locationLabel || "Pinned location"}.`,
           meta: this.getEventTimeLabel(event),
         };
       }
@@ -886,6 +964,14 @@ class ResidentDashboard extends React.Component {
 
     const now = new Date();
     const currentUser = auth.currentUser;
+    const disasterType = String(this.state.selectedSosDisasterType || "")
+      .trim()
+      .toLowerCase();
+    if (!disasterType) {
+      alert("Please select a disaster type before triggering SOS.");
+      return false;
+    }
+    const disasterTypeLabel = getDisasterTypeLabel(disasterType);
     const { coordinates, locationLabel, accuracyMeters } =
       await this.resolveCurrentLocationForSos();
 
@@ -925,6 +1011,8 @@ class ResidentDashboard extends React.Component {
         userId: currentUser.uid,
         userName: this.state.userName,
         triggeredAt: now,
+        disasterType,
+        disasterTypeLabel,
         locationLabel: coordinateLabel,
         coordinates: { lat, lng },
       });
@@ -945,6 +1033,26 @@ class ResidentDashboard extends React.Component {
     if (sosTriggered && !this.state.isSharingLocation) {
       await this.handleShareLocation();
     }
+  }
+
+  setSosDisasterType(disasterType) {
+    const normalizedType = String(disasterType || "")
+      .trim()
+      .toLowerCase();
+    const isValidType = SOS_DISASTER_TYPE_OPTIONS.some(
+      (option) => option.value === normalizedType,
+    );
+
+    if (!isValidType) {
+      return false;
+    }
+
+    this.setState({ selectedSosDisasterType: normalizedType });
+    return true;
+  }
+
+  handleSosDisasterTypeChange(event) {
+    this.setSosDisasterType(event?.target?.value);
   }
 
   resolveCurrentLocationForSos() {
@@ -1270,6 +1378,7 @@ class ResidentDashboard extends React.Component {
       mapCenter,
       userCurrentLocation,
       locationAccuracyMeters,
+      selectedSosDisasterType,
       isSharingLocation,
       accessibilitySettings,
       evacuationCenters,
@@ -1607,6 +1716,26 @@ class ResidentDashboard extends React.Component {
                             <p className='text-sm font-black text-slate-700 underline decoration-blue-200'>
                               +69 44 812 3400
                             </p>
+                            <div className='mt-3'>
+                              <label
+                                htmlFor='sos-disaster-type'
+                                className='block text-[10px] font-black text-slate-700 uppercase tracking-wide mb-1'
+                              >
+                                SOS Disaster Type
+                              </label>
+                              <select
+                                id='sos-disaster-type'
+                                value={selectedSosDisasterType}
+                                onChange={this.handleSosDisasterTypeChange}
+                                className='w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200'
+                              >
+                                {SOS_DISASTER_TYPE_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                             <div className='mt-3 grid grid-cols-2 gap-2'>
                               <button
                                 onClick={this.handleTriggerSosAndShare}
@@ -1689,6 +1818,11 @@ class ResidentDashboard extends React.Component {
                             <p className='text-[10px] font-medium text-slate-600 mt-0.5'>
                               {item.description}
                             </p>
+                            {item.disasterTypeLabel && (
+                              <p className='text-[9px] font-black text-red-600 mt-1 uppercase'>
+                                Disaster type: {item.disasterTypeLabel}
+                              </p>
+                            )}
                             {item.meta && (
                               <p className='text-[9px] font-semibold text-slate-400 mt-1 uppercase'>
                                 {item.meta}

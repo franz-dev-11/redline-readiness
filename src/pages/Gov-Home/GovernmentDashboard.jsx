@@ -229,8 +229,7 @@ class GovernmentDashboard extends React.Component {
     this.handleQrLookup = this.handleQrLookup.bind(this);
     this.getEventCoordinates = this.getEventCoordinates.bind(this);
     this.getEventLocationLabel = this.getEventLocationLabel.bind(this);
-    this.getDirectionsUrlForCoordinates =
-      this.getDirectionsUrlForCoordinates.bind(this);
+    this.handleShowResidentPin = this.handleShowResidentPin.bind(this);
     this.startUserProfileListener = this.startUserProfileListener.bind(this);
     this.handleGovProfileMenuToggle =
       this.handleGovProfileMenuToggle.bind(this);
@@ -727,30 +726,23 @@ class GovernmentDashboard extends React.Component {
     return "Location not shared";
   }
 
-  getDirectionsUrlForCoordinates(coordinates) {
+  handleShowResidentPin(coordinates) {
     if (!Array.isArray(coordinates) || coordinates.length < 2) {
-      return "";
+      return;
     }
 
-    const { userCurrentLocation } = this.state;
     const lat = Number(coordinates[0]);
     const lng = Number(coordinates[1]);
 
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      return "";
+      return;
     }
 
-    let originQuery = "";
-    if (Array.isArray(userCurrentLocation) && userCurrentLocation.length >= 2) {
-      const originLat = Number(userCurrentLocation[0]);
-      const originLng = Number(userCurrentLocation[1]);
-
-      if (Number.isFinite(originLat) && Number.isFinite(originLng)) {
-        originQuery = `&origin=${originLat.toFixed(6)},${originLng.toFixed(6)}`;
-      }
-    }
-
-    return `https://www.google.com/maps/dir/?api=1${originQuery}&destination=${lat.toFixed(6)},${lng.toFixed(6)}&travelmode=driving`;
+    this.setState({
+      mapDisplayMode: "sos-view",
+      mapCenter: [lat, lng],
+      mapZoom: Math.max(Number(this.state.mapZoom) || 14, 16),
+    });
   }
 
   async handleResolveSosAlert(event) {
@@ -1349,8 +1341,6 @@ class GovernmentDashboard extends React.Component {
                   {activeSosEvents.slice(0, 8).map((event) => {
                     const user = getUserByEvent(event);
                     const coordinates = this.getEventCoordinates(event);
-                    const directionsUrl =
-                      this.getDirectionsUrlForCoordinates(coordinates);
 
                     return (
                       <div
@@ -1382,16 +1372,14 @@ class GovernmentDashboard extends React.Component {
                             ? "Resolving..."
                             : "Resolve SOS"}
                         </button>
-                        {directionsUrl && (
-                          <a
-                            href={directionsUrl}
-                            target='_blank'
-                            rel='noreferrer'
-                            className='mt-2 ml-2 inline-block px-3 py-1.5 bg-blue-600 text-white rounded text-[11px] font-bold hover:bg-blue-700'
-                          >
-                            Directions
-                          </a>
-                        )}
+                        <button
+                          type='button'
+                          onClick={() => this.handleShowResidentPin(coordinates)}
+                          disabled={!coordinates}
+                          className='mt-2 ml-2 inline-block px-3 py-1.5 bg-blue-600 text-white rounded text-[11px] font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                        >
+                          Show Pin
+                        </button>
                       </div>
                     );
                   })}

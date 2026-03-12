@@ -77,7 +77,7 @@ class ResidentAlerts extends React.Component {
       locationLabel: "Location unavailable",
       disabilityType: "Not specified",
       medicalNeeds: "Not specified",
-      selectedSosDisasterType: "flood",
+      selectedSosDisasterType: "",
       sosTriggeredAt: null,
       emergencyEvents: [],
     };
@@ -97,7 +97,8 @@ class ResidentAlerts extends React.Component {
     this.getTypeLabel = this.getTypeLabel.bind(this);
     this.handleResolveAlert = this.handleResolveAlert.bind(this);
     this.getResolvedSourceIds = this.getResolvedSourceIds.bind(this);
-    this.handleSosDisasterTypeChange = this.handleSosDisasterTypeChange.bind(this);
+    this.handleSosDisasterTypeChange =
+      this.handleSosDisasterTypeChange.bind(this);
   }
 
   componentDidMount() {
@@ -596,6 +597,7 @@ class ResidentAlerts extends React.Component {
               onChange={this.handleSosDisasterTypeChange}
               className='w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200'
             >
+              <option value=''>-- Select disaster type --</option>
               {SOS_DISASTER_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -607,7 +609,7 @@ class ResidentAlerts extends React.Component {
           <div className='mt-4 flex items-center gap-3'>
             <button
               onClick={this.handleTriggerSOS}
-              disabled={sendingSos || loading}
+              disabled={sendingSos || loading || !selectedSosDisasterType}
               className='bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-black uppercase hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {sendingSos ? (
@@ -716,7 +718,8 @@ class ResidentAlerts extends React.Component {
                     className='border border-amber-200 bg-amber-50 rounded-xl p-4'
                   >
                     <p className='text-xs font-black text-amber-700 uppercase flex items-center gap-2'>
-                      <FontAwesomeIcon icon={faHouseFloodWater} /> Capacity Update
+                      <FontAwesomeIcon icon={faHouseFloodWater} /> Capacity
+                      Update
                     </p>
                     <p className='text-sm font-semibold text-slate-700 mt-1'>
                       Center name: {update.centerName || "Unspecified Center"}

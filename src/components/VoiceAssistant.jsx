@@ -1051,7 +1051,10 @@ function buildCommandsForView(view) {
     ...activeGlobalCommands,
   ];
 
-  return [...(viewCommands[view] || []), ...activeGlobalCommands];
+  return [
+    ...(viewCommands[view] || []),
+    ...activeGlobalCommands,
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -1064,7 +1067,13 @@ const VoiceAssistant = () => {
   const [currentView, setCurrentView] = useState(ViewManager.getCurrentView());
   const [commandMatched, setCommandMatched] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
+  const [lastStatusType, setLastStatusType] = useState("idle");
+  const [lastStatusDetail, setLastStatusDetail] = useState("");
   const [isSupported] = useState(() => VoiceCommandService.isSupported());
+  const [showDebugPanel] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("voiceDebug") === "1";
+  });
   const transcriptTimerRef = useRef(null);
   const commandFeedbackTimerRef = useRef(null);
 
@@ -1099,18 +1108,23 @@ const VoiceAssistant = () => {
   // Subscribe to VoiceCommandService status events
   useEffect(() => {
     return VoiceCommandService.subscribe((status) => {
+      setLastStatusType(status.type || "unknown");
       if (status.type === "started") {
+        setLastStatusDetail("Voice recognition started.");
         setIsListening(true);
         setMicDenied(false);
       } else if (status.type === "stopped") {
+        setLastStatusDetail("Voice recognition stopped.");
         setIsListening(false);
         setTranscript("");
       } else if (status.type === "transcript") {
+        setLastStatusDetail(status.text || "Transcript received.");
         setTranscript(status.text);
         if (transcriptTimerRef.current)
           clearTimeout(transcriptTimerRef.current);
         transcriptTimerRef.current = setTimeout(() => setTranscript(""), 3000);
       } else if (status.type === "command-matched") {
+        setLastStatusDetail("Command matched and executed.");
         setCommandMatched(true);
         if (commandFeedbackTimerRef.current)
           clearTimeout(commandFeedbackTimerRef.current);
@@ -1119,8 +1133,11 @@ const VoiceAssistant = () => {
           1500,
         );
       } else if (status.type === "error" && status.error === "mic-denied") {
+        setLastStatusDetail("Microphone access denied.");
         setIsListening(false);
         setMicDenied(true);
+      } else if (status.type === "error") {
+        setLastStatusDetail(String(status.error || "Voice error."));
       }
     });
   }, []);
@@ -1260,6 +1277,50 @@ const VoiceAssistant = () => {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* ---- Optional debug panel (?voiceDebug=1) ---- */}
+      {showDebugPanel && (
+        <div
+          style={{
+            pointerEvents: "all",
+            width: "270px",
+            borderRadius: "0.75rem",
+            border: "1px solid #dbeafe",
+            backgroundColor: "#f8fafc",
+            color: "#0f172a",
+            boxShadow: "0 6px 20px rgba(15,23,42,0.12)",
+            padding: "0.7rem 0.8rem",
+            fontSize: "0.72rem",
+            lineHeight: 1.4,
+          }}
+          aria-live='polite'
+          aria-label='Voice debug panel'
+        >
+          <div
+            style={{
+              fontWeight: 700,
+              fontSize: "0.7rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              marginBottom: "0.45rem",
+              color: "#0c4a6e",
+            }}
+          >
+            Voice Debug
+          </div>
+          <div>Supported: {isSupported ? "yes" : "no"}</div>
+          <div>Mic denied: {micDenied ? "yes" : "no"}</div>
+          <div>Listening: {isListening ? "yes" : "no"}</div>
+          <div>Current view: {currentView}</div>
+          <div>Last event: {lastStatusType}</div>
+          <div>
+            Last detail: {lastStatusDetail || "(none yet)"}
+          </div>
+          <div>
+            Live transcript: {transcript || "(none)"}
+          </div>
         </div>
       )}
 

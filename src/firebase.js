@@ -3,8 +3,7 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
+const firebaseEnv = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -13,6 +12,37 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
+
+function validateFirebaseEnv(config) {
+  const requiredKeys = [
+    "apiKey",
+    "authDomain",
+    "projectId",
+    "storageBucket",
+    "messagingSenderId",
+    "appId",
+  ];
+
+  const missing = requiredKeys.filter((key) => !String(config[key] || "").trim());
+  const apiKey = String(config.apiKey || "");
+  const looksLikePlaceholder =
+    apiKey.includes("REPLACE_WITH") ||
+    apiKey.includes("your-") ||
+    apiKey.length < 20;
+
+  if (missing.length || looksLikePlaceholder) {
+    throw new Error(
+      "Invalid Firebase environment variables. Update client/.env with real VITE_FIREBASE_* values from Firebase Console and restart Vite.",
+    );
+  }
+}
+
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  ...firebaseEnv,
+};
+
+validateFirebaseEnv(firebaseConfig);
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);

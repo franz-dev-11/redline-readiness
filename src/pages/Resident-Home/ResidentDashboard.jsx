@@ -246,7 +246,7 @@ class ResidentDashboard extends React.Component {
       currentTime: new Date(),
       lastUpdatedAt: new Date(),
       sosTriggeredAt: null,
-      selectedSosDisasterType: "flood",
+      selectedSosDisasterType: "",
       isSharingLocation: false,
       locationShareStartedAt: null,
       locationShareEndsAt: null,
@@ -306,7 +306,8 @@ class ResidentDashboard extends React.Component {
     this.handleTriggerSOS = this.handleTriggerSOS.bind(this);
     this.handleTriggerSosAndShare = this.handleTriggerSosAndShare.bind(this);
     this.setSosDisasterType = this.setSosDisasterType.bind(this);
-    this.handleSosDisasterTypeChange = this.handleSosDisasterTypeChange.bind(this);
+    this.handleSosDisasterTypeChange =
+      this.handleSosDisasterTypeChange.bind(this);
     this.confirmLowAccuracyProceed = this.confirmLowAccuracyProceed.bind(this);
     this.resolveLocationLabelFromCoordinates =
       this.resolveLocationLabelFromCoordinates.bind(this);
@@ -414,7 +415,10 @@ class ResidentDashboard extends React.Component {
       );
     }
     if (this._handleVoiceTriggerSos) {
-      window.removeEventListener("voiceTriggerSos", this._handleVoiceTriggerSos);
+      window.removeEventListener(
+        "voiceTriggerSos",
+        this._handleVoiceTriggerSos,
+      );
     }
     if (this.emergencyFeedUnsubscribe) {
       this.emergencyFeedUnsubscribe();
@@ -833,7 +837,9 @@ class ResidentDashboard extends React.Component {
     const dynamicItems = [];
 
     if (sosTriggeredAt) {
-      const activeSosDisasterType = getDisasterTypeLabel(selectedSosDisasterType);
+      const activeSosDisasterType = getDisasterTypeLabel(
+        selectedSosDisasterType,
+      );
       dynamicItems.push({
         id: "sos-live",
         type: "sos",
@@ -861,9 +867,7 @@ class ResidentDashboard extends React.Component {
       if (event.type === "announcement") {
         const announcementDisasterType =
           event.disasterTypeLabel ||
-          (event.disasterType
-            ? getDisasterTypeLabel(event.disasterType)
-            : "");
+          (event.disasterType ? getDisasterTypeLabel(event.disasterType) : "");
         return {
           id: `feed-${event.id}`,
           type: "announcement",
@@ -1729,8 +1733,14 @@ class ResidentDashboard extends React.Component {
                                 onChange={this.handleSosDisasterTypeChange}
                                 className='w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200'
                               >
+                                <option value=''>
+                                  -- Select disaster type --
+                                </option>
                                 {SOS_DISASTER_TYPE_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
+                                  <option
+                                    key={option.value}
+                                    value={option.value}
+                                  >
                                     {option.label}
                                   </option>
                                 ))}
@@ -1739,7 +1749,9 @@ class ResidentDashboard extends React.Component {
                             <div className='mt-3 grid grid-cols-2 gap-2'>
                               <button
                                 onClick={this.handleTriggerSosAndShare}
-                                disabled={isSosLocked}
+                                disabled={
+                                  isSosLocked || !selectedSosDisasterType
+                                }
                                 className='bg-red-600 text-white font-black py-2 rounded-xl text-[10px] hover:bg-red-700 uppercase tracking-wide transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-red-600 cursor-pointer'
                               >
                                 {isSosLocked

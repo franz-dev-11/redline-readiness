@@ -44,13 +44,191 @@ const PAGE_DESCRIPTIONS = {
     "Administrator dashboard. You have access to all system administration features.",
 };
 
+function buildHelpSpeech(commands) {
+  const nonNavigationLabels = new Set([
+    "Read page description",
+    "Describe current page",
+    "Show available commands",
+    "Stop voice assistant",
+  ]);
+
+  const spokenPhrases = [];
+  const seenLabels = new Set();
+
+  commands.forEach((command) => {
+    if (nonNavigationLabels.has(command.label) || seenLabels.has(command.label)) {
+      return;
+    }
+
+    seenLabels.add(command.label);
+    spokenPhrases.push(command.phrase);
+  });
+
+  if (spokenPhrases.length === 0) {
+    return "There are no navigation commands available on this page.";
+  }
+
+  return `Available navigation commands are: ${spokenPhrases.join(", ")}.`;
+}
+
 // ---------------------------------------------------------------------------
 // Build the command list for a given view
 // ---------------------------------------------------------------------------
 function buildCommandsForView(view) {
   const speak = (text) => VoiceCommandService.speak(text, true);
+  let getCurrentCommandsForHelp = () => [];
 
   const globalCommands = [
+    {
+      phrase: "go to main menu",
+      label: "Go to main menu",
+      action: () => {
+        ViewManager.goToSelection();
+        speak("Opening the main menu.");
+      },
+    },
+    {
+      phrase: "main menu",
+      label: "Go to main menu",
+      action: () => {
+        ViewManager.goToSelection();
+        speak("Opening the main menu.");
+      },
+    },
+    {
+      phrase: "home page",
+      label: "Go to main menu",
+      action: () => {
+        ViewManager.goToSelection();
+        speak("Opening the home page.");
+      },
+    },
+    {
+      phrase: "resident portal",
+      label: "Open Resident portal",
+      action: () => {
+        ViewManager.goToResidentLogin();
+        speak("Opening resident portal.");
+      },
+    },
+    {
+      phrase: "government portal",
+      label: "Open Government portal",
+      action: () => {
+        ViewManager.goToGovLogin();
+        speak("Opening government portal.");
+      },
+    },
+    {
+      phrase: "resident login",
+      label: "Open Resident portal",
+      action: () => {
+        ViewManager.goToResidentLogin();
+        speak("Opening resident login choices.");
+      },
+    },
+    {
+      phrase: "government login",
+      label: "Open Government portal",
+      action: () => {
+        ViewManager.goToGovLogin();
+        speak("Opening government login.");
+      },
+    },
+    {
+      phrase: "individual login",
+      label: "Open Individual login",
+      action: () => {
+        ViewManager.goToIndividualLogin();
+        speak("Opening individual login.");
+      },
+    },
+    {
+      phrase: "family login",
+      label: "Open Family login",
+      action: () => {
+        ViewManager.goToFamilyLogin();
+        speak("Opening family login.");
+      },
+    },
+    {
+      phrase: "resident dashboard",
+      label: "Open Resident dashboard",
+      action: () => {
+        ViewManager.goToHome();
+        speak("Opening resident dashboard.");
+      },
+    },
+    {
+      phrase: "my dashboard",
+      label: "Open Resident dashboard",
+      action: () => {
+        ViewManager.goToHome();
+        speak("Opening your dashboard.");
+      },
+    },
+    {
+      phrase: "view my profile",
+      label: "View profile",
+      action: () => {
+        ViewManager.goToViewProfile();
+        speak("Opening your profile.");
+      },
+    },
+    {
+      phrase: "open profile",
+      label: "View profile",
+      action: () => {
+        ViewManager.goToViewProfile();
+        speak("Opening your profile.");
+      },
+    },
+    {
+      phrase: "setup profile",
+      label: "Open profile setup",
+      action: () => {
+        ViewManager.goToSetupProfile();
+        speak("Opening profile setup.");
+      },
+    },
+    {
+      phrase: "family profile setup",
+      label: "Open family profile setup",
+      action: () => {
+        ViewManager.goToFamilySetupProfile();
+        speak("Opening family profile setup.");
+      },
+    },
+    {
+      phrase: "go back",
+      label: "Go back",
+      action: () => {
+        const backRoutes = {
+          "resident-auth-selection": () => ViewManager.goToSelection(),
+          "individual-login": () => ViewManager.goToResidentLogin(),
+          "family-login": () => ViewManager.goToResidentLogin(),
+          "gov-login": () => ViewManager.goToSelection(),
+          "gov-register": () => ViewManager.goToGovLogin(),
+          "gov-pending-approval": () => ViewManager.goToGovLogin(),
+          "individual-register": () => ViewManager.goToIndividualLogin(),
+          "family-register": () => ViewManager.goToFamilyLogin(),
+          "setup-profile": () => ViewManager.goToHome(),
+          "family-setup-profile": () => ViewManager.goToHome(),
+          "view-profile": () => ViewManager.goToHome(),
+          "gov-dashboard": () => ViewManager.goToSelection(),
+          "admin-dashboard": () => ViewManager.goToSelection(),
+        };
+
+        const navigateBack = backRoutes[view];
+        if (navigateBack) {
+          navigateBack();
+          speak("Going back.");
+          return;
+        }
+
+        speak("There is no back action available on this page.");
+      },
+    },
     {
       phrase: "read page",
       label: "Read page description",
@@ -76,7 +254,7 @@ function buildCommandsForView(view) {
       phrase: "help",
       label: "Show available commands",
       action: () => {
-        speak("Opening the help panel with available voice commands.");
+        speak(buildHelpSpeech(getCurrentCommandsForHelp()));
         window.dispatchEvent(new CustomEvent("voiceShowHelp"));
       },
     },
@@ -94,6 +272,14 @@ function buildCommandsForView(view) {
 
   const viewCommands = {
     selection: [
+      {
+        phrase: "open resident",
+        label: "Open Resident portal",
+        action: () => {
+          ViewManager.goToResidentLogin();
+          speak("Opening resident portal.");
+        },
+      },
       {
         phrase: "select resident",
         label: "Open Resident portal",
@@ -119,6 +305,14 @@ function buildCommandsForView(view) {
         },
       },
       {
+        phrase: "open government",
+        label: "Open Government portal",
+        action: () => {
+          ViewManager.goToGovLogin();
+          speak("Opening government portal.");
+        },
+      },
+      {
         phrase: "government",
         label: "Open Government portal",
         action: () => {
@@ -129,6 +323,14 @@ function buildCommandsForView(view) {
     ],
 
     "resident-auth-selection": [
+      {
+        phrase: "open individual",
+        label: "Individual login",
+        action: () => {
+          ViewManager.goToIndividualLogin();
+          speak("Opening individual login.");
+        },
+      },
       {
         phrase: "select individual",
         label: "Individual login",
@@ -154,6 +356,14 @@ function buildCommandsForView(view) {
         },
       },
       {
+        phrase: "open family",
+        label: "Family login",
+        action: () => {
+          ViewManager.goToFamilyLogin();
+          speak("Opening family login.");
+        },
+      },
+      {
         phrase: "family",
         label: "Family login",
         action: () => {
@@ -172,6 +382,14 @@ function buildCommandsForView(view) {
     ],
 
     "individual-login": [
+      {
+        phrase: "open registration",
+        label: "Register new account",
+        action: () => {
+          ViewManager.goToIndividualRegister();
+          speak("Opening individual registration.");
+        },
+      },
       {
         phrase: "go back",
         label: "Go back",
@@ -200,6 +418,14 @@ function buildCommandsForView(view) {
 
     "family-login": [
       {
+        phrase: "open registration",
+        label: "Register family account",
+        action: () => {
+          ViewManager.goToFamilyRegister();
+          speak("Opening family registration.");
+        },
+      },
+      {
         phrase: "go back",
         label: "Go back",
         action: () => {
@@ -226,6 +452,14 @@ function buildCommandsForView(view) {
     ],
 
     "gov-login": [
+      {
+        phrase: "open registration",
+        label: "Register government account",
+        action: () => {
+          ViewManager.goToGovRegister();
+          speak("Opening government registration.");
+        },
+      },
       {
         phrase: "go back",
         label: "Go back",
@@ -342,6 +576,16 @@ function buildCommandsForView(view) {
 
     home: [
       {
+        phrase: "dashboard",
+        label: "Dashboard tab",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceTabChange", { detail: { tab: "dashboard" } }),
+          );
+          speak("Dashboard.");
+        },
+      },
+      {
         phrase: "go to dashboard",
         label: "Dashboard tab",
         action: () => {
@@ -362,6 +606,16 @@ function buildCommandsForView(view) {
         },
       },
       {
+        phrase: "open alerts",
+        label: "Alerts tab",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceTabChange", { detail: { tab: "alerts" } }),
+          );
+          speak("Alerts tab.");
+        },
+      },
+      {
         phrase: "alerts",
         label: "Alerts tab",
         action: () => {
@@ -369,6 +623,18 @@ function buildCommandsForView(view) {
             new CustomEvent("voiceTabChange", { detail: { tab: "alerts" } }),
           );
           speak("Alerts.");
+        },
+      },
+      {
+        phrase: "go to evacuation plan",
+        label: "Evacuation Plan tab",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceTabChange", {
+              detail: { tab: "evac-plan" },
+            }),
+          );
+          speak("Evacuation plan tab.");
         },
       },
       {
@@ -408,6 +674,18 @@ function buildCommandsForView(view) {
         },
       },
       {
+        phrase: "open resources",
+        label: "Resources tab",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceTabChange", {
+              detail: { tab: "resources" },
+            }),
+          );
+          speak("Resources tab.");
+        },
+      },
+      {
         phrase: "go to resources",
         label: "Resources tab",
         action: () => {
@@ -432,6 +710,16 @@ function buildCommandsForView(view) {
         },
       },
       {
+        phrase: "open contacts",
+        label: "Contacts tab",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceTabChange", { detail: { tab: "contacts" } }),
+          );
+          speak("Contacts tab.");
+        },
+      },
+      {
         phrase: "go to contacts",
         label: "Contacts tab",
         action: () => {
@@ -449,6 +737,16 @@ function buildCommandsForView(view) {
             new CustomEvent("voiceTabChange", { detail: { tab: "contacts" } }),
           );
           speak("Contacts.");
+        },
+      },
+      {
+        phrase: "open sectors",
+        label: "Sectors tab",
+        action: () => {
+          window.dispatchEvent(
+            new CustomEvent("voiceTabChange", { detail: { tab: "sectors" } }),
+          );
+          speak("Sectors tab.");
         },
       },
       {
@@ -505,6 +803,11 @@ function buildCommandsForView(view) {
       },
     ],
   };
+
+  getCurrentCommandsForHelp = () => [
+    ...(viewCommands[view] || []),
+    ...globalCommands,
+  ];
 
   return [...(viewCommands[view] || []), ...globalCommands];
 }

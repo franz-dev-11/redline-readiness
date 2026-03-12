@@ -961,6 +961,36 @@ class ResidentDashboard extends React.Component {
     );
   }
 
+  getFallbackCoordinatesForEmergency() {
+    const fromUserCurrent = this.state.userCurrentLocation;
+    const fromMapCenter = this.state.mapCenter;
+
+    const candidates = [
+      Array.isArray(fromUserCurrent) ? fromUserCurrent : null,
+      Array.isArray(fromMapCenter) ? fromMapCenter : null,
+    ];
+
+    for (const candidate of candidates) {
+      const lng = Number(candidate?.[0]);
+      const lat = Number(candidate?.[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return { lat, lng };
+      }
+    }
+
+    return null;
+  }
+
+  confirmFallbackLocationProceed(reasonLabel, mode = "sos") {
+    const actionLabel =
+      mode === "share" ? "share your location" : "trigger SOS";
+    const reason = String(reasonLabel || "Precise GPS not available.");
+
+    return window.confirm(
+      `${reason}\n\nUse your current map pin / last known location instead and ${actionLabel}?`,
+    );
+  }
+
   async handleTriggerSOS() {
     if (this.hasActiveSosForCurrentUser()) {
       return false;
@@ -979,14 +1009,26 @@ class ResidentDashboard extends React.Component {
     const { coordinates, locationLabel, accuracyMeters } =
       await this.resolveCurrentLocationForSos();
 
-    const lat = Number(coordinates?.lat);
-    const lng = Number(coordinates?.lng);
+    let lat = Number(coordinates?.lat);
+    let lng = Number(coordinates?.lng);
+    let effectiveLocationLabel = locationLabel;
 
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      alert(
-        "Unable to get your exact GPS location. Please enable precise location and try again.",
-      );
-      return false;
+      const fallbackCoordinates = this.getFallbackCoordinatesForEmergency();
+      if (!fallbackCoordinates) {
+        alert(
+          `${locationLabel || "Unable to get your exact GPS location."} Please enable location permission and try again.`,
+        );
+        return false;
+      }
+
+      if (!this.confirmFallbackLocationProceed(locationLabel, "sos")) {
+        return false;
+      }
+
+      lat = fallbackCoordinates.lat;
+      lng = fallbackCoordinates.lng;
+      effectiveLocationLabel = "Map-selected / last known location";
     }
 
     if (!this.confirmLowAccuracyProceed(accuracyMeters, "sos")) {
@@ -996,7 +1038,7 @@ class ResidentDashboard extends React.Component {
     const coordinateLabel =
       Number.isFinite(lat) && Number.isFinite(lng)
         ? `${lat.toFixed(6)}, ${lng.toFixed(6)}`
-        : locationLabel;
+        : effectiveLocationLabel;
 
     this.setState({
       sosTriggeredAt: now,
@@ -1189,16 +1231,27 @@ class ResidentDashboard extends React.Component {
     const { shareDurationMinutes, userName } = this.state;
     const currentUser = auth.currentUser;
     const endsAt = new Date(now.getTime() + shareDurationMinutes * 60000);
-    const { coordinates, accuracyMeters } =
+    const { coordinates, locationLabel, accuracyMeters } =
       await this.resolveCurrentLocationForSos();
-    const lat = Number(coordinates?.lat);
-    const lng = Number(coordinates?.lng);
+
+    let lat = Number(coordinates?.lat);
+    let lng = Number(coordinates?.lng);
 
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      alert(
-        "Unable to get your exact GPS location for sharing. Please enable precise location and try again.",
-      );
-      return false;
+      const fallbackCoordinates = this.getFallbackCoordinatesForEmergency();
+      if (!fallbackCoordinates) {
+        alert(
+          `${locationLabel || "Unable to get your exact GPS location for sharing."} Please enable location permission and try again.`,
+        );
+        return false;
+      }
+
+      if (!this.confirmFallbackLocationProceed(locationLabel, "share")) {
+        return false;
+      }
+
+      lat = fallbackCoordinates.lat;
+      lng = fallbackCoordinates.lng;
     }
 
     if (!this.confirmLowAccuracyProceed(accuracyMeters, "share")) {

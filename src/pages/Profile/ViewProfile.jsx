@@ -1,9 +1,7 @@
 import React from "react";
-import Header from "../../components/Header";
+import ResidentDashboardHeader from "../../components/ResidentDashboardHeader";
 import AuthService from "../../services/AuthService";
 import { auth } from "../../firebase";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import ViewFamilyProfile from "./ViewFamilyProfile";
 
 /**
@@ -46,11 +44,22 @@ class ViewProfile extends React.Component {
 
   render() {
     const { loading, error, profile } = this.state;
+    const headerUserName =
+      profile?.personalInfo?.fullName || profile?.fullName || "Resident";
 
     if (loading) {
       return (
         <div className='min-h-screen bg-[#f3f4f6]'>
-          <Header subtitle='View Profile' logoStyle='svg'></Header>
+          <ResidentDashboardHeader
+            userName={headerUserName}
+            activeTab=''
+            profileMenuActiveItem='view-profile'
+            onTabChange={(tabKey) => {
+              if (typeof this.props.onNavigateTab === "function") {
+                this.props.onNavigateTab(tabKey);
+              }
+            }}
+          />
           <div className='max-w-5xl mx-auto p-6'>
             <div className='bg-white border rounded p-6 text-sm text-gray-500'>
               Loading profile...
@@ -63,7 +72,16 @@ class ViewProfile extends React.Component {
     if (error) {
       return (
         <div className='min-h-screen bg-[#f3f4f6]'>
-          <Header subtitle='View Profile' logoStyle='svg'></Header>
+          <ResidentDashboardHeader
+            userName={headerUserName}
+            activeTab=''
+            profileMenuActiveItem='view-profile'
+            onTabChange={(tabKey) => {
+              if (typeof this.props.onNavigateTab === "function") {
+                this.props.onNavigateTab(tabKey);
+              }
+            }}
+          />
           <div className='max-w-5xl mx-auto p-6'>
             <div className='bg-white border rounded p-6'>
               <div className='text-red-600 text-sm font-bold mb-4'>{error}</div>
@@ -87,7 +105,13 @@ class ViewProfile extends React.Component {
       family?.profileMode === "family";
 
     if (isFamilyProfile) {
-      return <ViewFamilyProfile profile={profile} onBack={this.props.onBack} />;
+      return (
+        <ViewFamilyProfile
+          profile={profile}
+          onBack={this.props.onBack}
+          onNavigateTab={this.props.onNavigateTab}
+        />
+      );
     }
 
     const displayName = isFamilyProfile
@@ -107,17 +131,18 @@ class ViewProfile extends React.Component {
 
     return (
       <div className='min-h-screen bg-[#f3f4f6]'>
-        <Header subtitle='View Profile' logoStyle='svg'></Header>
+        <ResidentDashboardHeader
+          userName={headerUserName}
+          activeTab=''
+          profileMenuActiveItem='view-profile'
+          onTabChange={(tabKey) => {
+            if (typeof this.props.onNavigateTab === "function") {
+              this.props.onNavigateTab(tabKey);
+            }
+          }}
+        />
 
         <div className='max-w-6xl mx-auto p-6'>
-          <button
-            type='button'
-            onClick={this.props.onBack}
-            className='mb-4 text-sm font-bold text-slate-600 hover:text-slate-900 flex items-center gap-2'
-          >
-            <FontAwesomeIcon icon={faArrowLeft} /> Back to Dashboard
-          </button>
-
           <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
             <div className='lg:col-span-8 bg-white border rounded p-6'>
               <div className='flex items-center gap-4 mb-4'>

@@ -23,6 +23,7 @@ class ViewManager {
     };
 
     this.currentView = this.views.SELECTION;
+    this.pendingHomeTab = null;
     this.observers = [];
   }
 
@@ -111,6 +112,25 @@ class ViewManager {
    */
   goToHome() {
     this.navigateTo(this.views.HOME);
+  }
+
+  /**
+   * Go to home/dashboard and request a specific tab to open.
+   * @param {string} tabKey - Resident dashboard tab key
+   */
+  goToHomeWithTab(tabKey) {
+    this.pendingHomeTab = String(tabKey || "").trim() || null;
+    this.navigateTo(this.views.HOME);
+  }
+
+  /**
+   * Consume and clear requested home tab.
+   * @returns {string|null}
+   */
+  consumePendingHomeTab() {
+    const tab = this.pendingHomeTab;
+    this.pendingHomeTab = null;
+    return tab;
   }
 
   /**

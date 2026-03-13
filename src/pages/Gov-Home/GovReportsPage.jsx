@@ -158,6 +158,21 @@ function formatCalendarDateLabel(value) {
   });
 }
 
+function normalizeDateRangeValues(leftValue, rightValue) {
+  if (!leftValue || !rightValue) {
+    return {
+      start: leftValue || rightValue || "",
+      end: leftValue || rightValue || "",
+    };
+  }
+
+  if (leftValue <= rightValue) {
+    return { start: leftValue, end: rightValue };
+  }
+
+  return { start: rightValue, end: leftValue };
+}
+
 function getMonthStart(date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
@@ -204,6 +219,8 @@ function GovReportsPage({
     getMonthStart(new Date()),
   );
   const dateRangePickerRef = React.useRef(null);
+  const isDraggingRangeRef = React.useRef(false);
+  const dragAnchorDateValueRef = React.useRef("");
 
   const selectedStartDate = React.useMemo(
     () => getDateInputStart(exportStartDate),
@@ -227,6 +244,20 @@ function GovReportsPage({
 
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [showDateRangePicker]);
+
+  React.useEffect(() => {
+    if (!showDateRangePicker) {
+      return undefined;
+    }
+
+    const handlePointerUp = () => {
+      isDraggingRangeRef.current = false;
+      dragAnchorDateValueRef.current = "";
+    };
+
+    window.addEventListener("mouseup", handlePointerUp);
+    return () => window.removeEventListener("mouseup", handlePointerUp);
   }, [showDateRangePicker]);
 
   const residentUsers = React.useMemo(
@@ -501,24 +532,48 @@ function GovReportsPage({
     };
   }, [emergencyEvents, exportEndDate, exportStartDate]);
 
-  const handleCalendarDateClick = React.useCallback((date) => {
+  const handleCalendarDatePointerDown = React.useCallback((date) => {
     const nextValue = formatDateInputValue(date);
+    if (!nextValue) return;
 
-    if (!exportStartDate || (exportStartDate && exportEndDate)) {
-      setExportStartDate(nextValue);
-      setExportEndDate("");
-      return;
-    }
-
-    if (nextValue < exportStartDate) {
-      setExportStartDate(nextValue);
-      setExportEndDate("");
-      return;
-    }
-
+    isDraggingRangeRef.current = true;
+    dragAnchorDateValueRef.current = nextValue;
+    setExportStartDate(nextValue);
     setExportEndDate(nextValue);
-    setShowDateRangePicker(false);
-  }, [exportEndDate, exportStartDate]);
+  }, []);
+
+  const handleCalendarDatePointerEnter = React.useCallback((date) => {
+    if (!isDraggingRangeRef.current) {
+      return;
+    }
+
+    const nextValue = formatDateInputValue(date);
+    if (!nextValue) return;
+
+    const { start, end } = normalizeDateRangeValues(
+      dragAnchorDateValueRef.current,
+      nextValue,
+    );
+
+    setExportStartDate(start);
+    setExportEndDate(end);
+  }, []);
+
+  const handleCalendarDatePointerUp = React.useCallback((date) => {
+    if (!isDraggingRangeRef.current) {
+      return;
+    }
+
+    const nextValue = formatDateInputValue(date);
+    const { start, end } = normalizeDateRangeValues(
+      dragAnchorDateValueRef.current,
+      nextValue,
+    );
+    setExportStartDate(start);
+    setExportEndDate(end);
+    isDraggingRangeRef.current = false;
+    dragAnchorDateValueRef.current = "";
+  }, []);
 
   const handleClearDateRange = React.useCallback(() => {
     setExportStartDate("");
@@ -699,7 +754,7 @@ function GovReportsPage({
                       Select export range
                     </p>
                     <p className='text-xs text-gray-500'>
-                      Click a start date, then click an end date to highlight the range.
+                      Click and drag across dates to select and highlight a range.
                     </p>
                   </div>
                   <div className='flex gap-2'>
@@ -801,7 +856,15 @@ function GovReportsPage({
                               <button
                                 key={cell.key}
                                 type='button'
-                                onClick={() => handleCalendarDateClick(cell.date)}
+                                onMouseDown={() =>
+                                  handleCalendarDatePointerDown(cell.date)
+                                }
+                                onMouseEnter={() =>
+                                  handleCalendarDatePointerEnter(cell.date)
+                                }
+                                onMouseUp={() =>
+                                  handleCalendarDatePointerUp(cell.date)
+                                }
                                 className={cellClassName}
                               >
                                 {cell.date.getDate()}

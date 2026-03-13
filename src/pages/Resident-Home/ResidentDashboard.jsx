@@ -417,6 +417,10 @@ class ResidentDashboard extends React.Component {
    * Component lifecycle - fetch user data on mount
    */
   componentDidMount() {
+    if (this.props.initialTab) {
+      this.handleTabChange(this.props.initialTab);
+    }
+
     this.fetchUserData();
     this.startUserProfileListener();
     this.startEmergencyFeedListener();

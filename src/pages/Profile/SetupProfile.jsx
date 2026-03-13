@@ -7,7 +7,7 @@ if (typeof window !== "undefined") {
 import ProfileService from "../../services/ProfileService";
 import AuthService from "../../services/AuthService";
 import { auth } from "../../firebase";
-import Header from "../../components/Header";
+import ResidentDashboardHeader from "../../components/ResidentDashboardHeader";
 
 /**
  * StepPill - Reusable step indicator component
@@ -1191,8 +1191,16 @@ class SetupProfile extends React.Component {
 
     return (
       <div className='min-h-screen bg-[#f3f4f6]'>
-        {/* Header Component with Profile Setup subtitle */}
-        <Header subtitle='Profile Setup' logoStyle='svg'></Header>
+        <ResidentDashboardHeader
+          userName={fullName || "Resident"}
+          activeTab=''
+          profileMenuActiveItem='setup-profile'
+          onTabChange={(tabKey) => {
+            if (typeof this.props.onNavigateTab === "function") {
+              this.props.onNavigateTab(tabKey);
+            }
+          }}
+        />
 
         {/* Main content */}
         <div className='p-6'>
@@ -1200,28 +1208,6 @@ class SetupProfile extends React.Component {
             <div className='bg-white rounded shadow-sm overflow-hidden'>
               {/* Page header with progress */}
               <div className='px-6 py-4 border-b'>
-                {/* Back button */}
-                <button
-                  onClick={this.props.onBack}
-                  className='mb-4 flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 font-semibold transition-colors'
-                >
-                  <svg
-                    xmlns='http://www.w3.org/2000/svg'
-                    className='h-4 w-4'
-                    fill='none'
-                    viewBox='0 0 24 24'
-                    stroke='currentColor'
-                  >
-                    <path
-                      strokeLinecap='round'
-                      strokeLinejoin='round'
-                      strokeWidth={2}
-                      d='M15 19l-7-7 7-7'
-                    />
-                  </svg>
-                  Return to Dashboard
-                </button>
-
                 <div className='flex items-start justify-between gap-6 mb-4'>
                   <div className='flex-1 min-w-0'>
                     <h1 className='text-2xl font-black text-[#3a4a5b]'>

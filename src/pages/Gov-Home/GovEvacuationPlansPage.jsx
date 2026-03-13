@@ -45,14 +45,7 @@ function getFamilyMemberRows(user) {
 }
 
 function GovEvacuationPlansPage({ evacuationCenters = [] }) {
-  const [uploadedPlans, setUploadedPlans] = React.useState([
-    {
-      id: "plan-1",
-      fileName: "Sta-Maria-Evacuation-Zones.pdf",
-      version: "v1.2",
-      uploadDate: "2026-03-01",
-    },
-  ]);
+  const [uploadedPlans, setUploadedPlans] = React.useState([]);
   const [planDraft, setPlanDraft] = React.useState({
     fileName: "",
     version: "",
@@ -67,25 +60,13 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
     capacity: "",
   });
 
-  const [familyAssignments, setFamilyAssignments] = React.useState([
-    {
-      id: "assign-1",
-      familyId: "FAM-1001",
-      centerId: 1,
-    },
-  ]);
+  const [familyAssignments, setFamilyAssignments] = React.useState([]);
   const [assignmentDraft, setAssignmentDraft] = React.useState({
     familyId: "",
     centerId: "",
   });
 
-  const [familyTags, setFamilyTags] = React.useState([
-    {
-      id: "tag-1",
-      familyId: "FAM-1001",
-      tagType: "Together",
-    },
-  ]);
+  const [familyTags, setFamilyTags] = React.useState([]);
   const [tagDraft, setTagDraft] = React.useState({
     familyId: "",
     tagType: "Together",
@@ -561,18 +542,24 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
           </div>
 
           <div className='space-y-2'>
-            {uploadedPlans.map((plan) => (
-              <div
-                key={plan.id}
-                className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm'
-              >
-                <p className='font-bold text-[#3a4a5b]'>{plan.fileName}</p>
-                <p className='text-xs text-gray-600'>Version: {plan.version}</p>
-                <p className='text-xs text-gray-500'>
-                  Upload Date: {plan.uploadDate}
-                </p>
-              </div>
-            ))}
+            {uploadedPlans.length === 0 ? (
+              <p className='text-xs text-gray-500'>
+                No uploaded plans yet.
+              </p>
+            ) : (
+              uploadedPlans.map((plan) => (
+                <div
+                  key={plan.id}
+                  className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm'
+                >
+                  <p className='font-bold text-[#3a4a5b]'>{plan.fileName}</p>
+                  <p className='text-xs text-gray-600'>Version: {plan.version}</p>
+                  <p className='text-xs text-gray-500'>
+                    Upload Date: {plan.uploadDate}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -774,20 +761,24 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
           </div>
 
           <div className='space-y-2'>
-            {familyAssignments.map((assignment) => (
-              <div
-                key={assignment.id}
-                className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm'
-              >
-                <p className='font-semibold text-[#3a4a5b]'>
-                  Family ID: {assignment.familyId}
-                </p>
-                <p className='text-xs text-gray-600'>
-                  Center ID: {assignment.centerId} (
-                  {getCenterName(assignment.centerId)})
-                </p>
-              </div>
-            ))}
+            {familyAssignments.length === 0 ? (
+              <p className='text-xs text-gray-500'>No family assignments yet.</p>
+            ) : (
+              familyAssignments.map((assignment) => (
+                <div
+                  key={assignment.id}
+                  className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm'
+                >
+                  <p className='font-semibold text-[#3a4a5b]'>
+                    Family ID: {assignment.familyId}
+                  </p>
+                  <p className='text-xs text-gray-600'>
+                    Center ID: {assignment.centerId} (
+                    {getCenterName(assignment.centerId)})
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -828,25 +819,29 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
         </div>
 
         <div className='space-y-2'>
-          {familyTags.map((tag) => (
-            <div
-              key={tag.id}
-              className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 flex items-center justify-between text-sm'
-            >
-              <span className='font-semibold text-[#3a4a5b]'>
-                Family ID: {tag.familyId}
-              </span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                  tag.tagType === "Together"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-red-100 text-red-700"
-                }`}
+          {familyTags.length === 0 ? (
+            <p className='text-xs text-gray-500'>No family tags yet.</p>
+          ) : (
+            familyTags.map((tag) => (
+              <div
+                key={tag.id}
+                className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 flex items-center justify-between text-sm'
               >
-                Tag Type: {tag.tagType}
-              </span>
-            </div>
-          ))}
+                <span className='font-semibold text-[#3a4a5b]'>
+                  Family ID: {tag.familyId}
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    tag.tagType === "Together"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  Tag Type: {tag.tagType}
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

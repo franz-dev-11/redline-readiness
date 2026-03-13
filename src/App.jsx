@@ -168,6 +168,7 @@ class App extends React.Component {
         return this.renderWithTransition(
           "home",
           <ResidentDashboard
+            initialTab={ViewManager.consumePendingHomeTab()}
             onLogout={() => ViewManager.goToSelection()}
             onOpenSetup={(accountType) => {
               const normalizedType = String(accountType || "").toLowerCase();
@@ -185,19 +186,28 @@ class App extends React.Component {
       case "setup-profile":
         return this.renderWithTransition(
           "setup-profile",
-          <SetupProfile onBack={() => ViewManager.goToHome()} />,
+          <SetupProfile
+            onBack={() => ViewManager.goToHome()}
+            onNavigateTab={(tabKey) => ViewManager.goToHomeWithTab(tabKey)}
+          />,
         );
 
       case "family-setup-profile":
         return this.renderWithTransition(
           "family-setup-profile",
-          <SetupFamilyProfile onBack={() => ViewManager.goToHome()} />,
+          <SetupFamilyProfile
+            onBack={() => ViewManager.goToHome()}
+            onNavigateTab={(tabKey) => ViewManager.goToHomeWithTab(tabKey)}
+          />,
         );
 
       case "view-profile":
         return this.renderWithTransition(
           "view-profile",
-          <ViewProfile onBack={() => ViewManager.goToHome()} />,
+          <ViewProfile
+            onBack={() => ViewManager.goToHome()}
+            onNavigateTab={(tabKey) => ViewManager.goToHomeWithTab(tabKey)}
+          />,
         );
 
       default:

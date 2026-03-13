@@ -1,7 +1,5 @@
 import React from "react";
-import Header from "../../components/Header";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
+import ResidentDashboardHeader from "../../components/ResidentDashboardHeader";
 
 class ViewFamilyProfile extends React.Component {
   formatDateValue(rawValue) {
@@ -27,7 +25,7 @@ class ViewFamilyProfile extends React.Component {
   }
 
   render() {
-    const { profile, onBack } = this.props;
+    const { profile } = this.props;
 
     const family = profile?.familyProfile || {};
     const personal = profile?.personalInfo || {};
@@ -54,17 +52,18 @@ class ViewFamilyProfile extends React.Component {
 
     return (
       <div className='min-h-screen bg-[#f3f4f6]'>
-        <Header subtitle='View Family Profile' logoStyle='svg'></Header>
+        <ResidentDashboardHeader
+          userName={displayName}
+          activeTab=''
+          profileMenuActiveItem='view-profile'
+          onTabChange={(tabKey) => {
+            if (typeof this.props.onNavigateTab === "function") {
+              this.props.onNavigateTab(tabKey);
+            }
+          }}
+        />
 
         <div className='max-w-6xl mx-auto p-6'>
-          <button
-            type='button'
-            onClick={onBack}
-            className='mb-4 text-sm font-bold text-slate-600 hover:text-slate-900 flex items-center gap-2'
-          >
-            <FontAwesomeIcon icon={faArrowLeft} /> Back to Dashboard
-          </button>
-
           <div className='grid grid-cols-1 lg:grid-cols-12 gap-6'>
             <div className='lg:col-span-8 bg-white border rounded p-6'>
               <div className='flex items-center gap-4 mb-4'>
@@ -101,8 +100,10 @@ class ViewFamilyProfile extends React.Component {
                     {family.householdHead || profile?.fullName || "—"}
                   </p>
                   <p className='text-xs text-slate-500 mt-1'>
-                    Date of Birth: {this.formatDateValue(
-                      family.householdHeadDateOfBirth || family.householdHeadDob,
+                    Date of Birth:{" "}
+                    {this.formatDateValue(
+                      family.householdHeadDateOfBirth ||
+                        family.householdHeadDob,
                     )}
                   </p>
                   <p className='text-xs text-slate-500 mt-1'>

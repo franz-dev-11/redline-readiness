@@ -9,6 +9,8 @@ import {
   faUsersViewfinder,
   faChevronDown,
   faUserCircle,
+  faPenToSquare,
+  faRightFromBracket,
 } from "@fortawesome/free-solid-svg-icons";
 
 import logo from "../assets/logo.png";
@@ -19,10 +21,13 @@ class ResidentDashboardHeader extends React.Component {
 
     this.state = {
       isMobileMenuOpen: false,
+      isProfileMenuOpen: false,
     };
 
     this.toggleMobileMenu = this.toggleMobileMenu.bind(this);
     this.closeMobileMenu = this.closeMobileMenu.bind(this);
+    this.toggleProfileMenu = this.toggleProfileMenu.bind(this);
+    this.handleProfileMenuClick = this.handleProfileMenuClick.bind(this);
   }
 
   toggleMobileMenu() {
@@ -32,13 +37,45 @@ class ResidentDashboardHeader extends React.Component {
   }
 
   closeMobileMenu() {
-    this.setState({ isMobileMenuOpen: false });
+    this.setState({ isMobileMenuOpen: false, isProfileMenuOpen: false });
+  }
+
+  toggleProfileMenu() {
+    this.setState((prevState) => ({
+      isProfileMenuOpen: !prevState.isProfileMenuOpen,
+    }));
+  }
+
+  handleProfileMenuClick() {
+    const { onProfileMenuClick } = this.props;
+
+    if (typeof onProfileMenuClick === "function") {
+      onProfileMenuClick();
+      return;
+    }
+
+    this.toggleProfileMenu();
+  }
+
+  isProfileMenuVisible() {
+    const { showProfileMenu } = this.props;
+    if (typeof showProfileMenu === "boolean") {
+      return showProfileMenu;
+    }
+
+    return this.state.isProfileMenuOpen;
   }
 
   renderProfileMenu(isMobile = false) {
-    const { menuContent, showProfileMenu } = this.props;
+    const {
+      menuContent,
+      profileMenuActiveItem,
+      onViewProfile,
+      onOpenSetup,
+      onLogout,
+    } = this.props;
 
-    if (!menuContent || !showProfileMenu) {
+    if (!this.isProfileMenuVisible()) {
       return null;
     }
 
@@ -46,18 +83,81 @@ class ResidentDashboardHeader extends React.Component {
       ? "origin-top pointer-events-auto hamburger-menu-expandable"
       : "origin-top pointer-events-auto profile-dropdown-expandable";
 
-    if (!React.isValidElement(menuContent)) {
-      return <div className={transitionClass}>{menuContent}</div>;
+    if (menuContent) {
+      if (!React.isValidElement(menuContent)) {
+        return <div className={transitionClass}>{menuContent}</div>;
+      }
+
+      const existingClassName = menuContent.props.className || "";
+      const positionClass = isMobile
+        ? "relative !right-auto !left-auto !mt-2 !w-full"
+        : "absolute right-0 top-full mt-2";
+
+      return React.cloneElement(menuContent, {
+        className: `${existingClassName} ${positionClass} ${transitionClass}`,
+      });
     }
 
-    const existingClassName = menuContent.props.className || "";
     const positionClass = isMobile
       ? "relative !right-auto !left-auto !mt-2 !w-full"
-      : "absolute right-0 top-full mt-2";
+      : "absolute right-0 top-full mt-2 w-56";
 
-    return React.cloneElement(menuContent, {
-      className: `${existingClassName} ${positionClass} ${transitionClass}`,
-    });
+    const setupActive = profileMenuActiveItem === "setup-profile";
+    const viewActive = profileMenuActiveItem === "view-profile";
+
+    return (
+      <div
+        className={`${positionClass} ${transitionClass} bg-white border border-gray-200 rounded-md shadow-xl py-1 z-2001 overflow-hidden`}
+      >
+        <button
+          type='button'
+          onClick={onViewProfile}
+          className={`w-full text-left px-4 py-3 text-sm flex items-center gap-3 font-bold transition-colors ${
+            viewActive
+              ? "bg-blue-50 text-blue-700"
+              : "text-slate-700 hover:bg-gray-50"
+          }`}
+        >
+          <FontAwesomeIcon icon={faUserCircle} /> View Profile
+        </button>
+        <button
+          type='button'
+          onClick={onOpenSetup}
+          className={`w-full text-left px-4 py-3 text-sm flex items-center gap-3 font-bold transition-colors ${
+            setupActive
+              ? "bg-blue-50 text-blue-700"
+              : "text-slate-700 hover:bg-gray-50"
+          }`}
+        >
+          <FontAwesomeIcon icon={faPenToSquare} /> Setup Profile
+        </button>
+        {typeof onLogout === "function" && (
+          <button
+            type='button'
+            onClick={onLogout}
+            className='w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 font-bold transition-colors'
+          >
+            <FontAwesomeIcon icon={faRightFromBracket} /> Sign Out
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  getNavigationItems() {
+    const { navItems } = this.props;
+    if (Array.isArray(navItems) && navItems.length > 0) {
+      return navItems;
+    }
+
+    return [
+      { icon: faHouse, label: "Dashboard", key: "dashboard" },
+      { icon: faBell, label: "Alerts", key: "alerts" },
+      { icon: faMapLocationDot, label: "Evac Plan", key: "evac-plan" },
+      { icon: faBookOpen, label: "Resources", key: "resources" },
+      { icon: faAddressBook, label: "Contacts", key: "contacts" },
+      { icon: faUsersViewfinder, label: "Sectors", key: "sectors" },
+    ];
   }
 
   renderTabItem(icon, label, tabKey, active = false) {
@@ -82,10 +182,12 @@ class ResidentDashboardHeader extends React.Component {
           active ? "text-blue-700" : "text-slate-500 hover:text-blue-700"
         }`}
       >
-        <FontAwesomeIcon
-          icon={icon}
-          className={active ? "text-blue-700" : "text-gray-400"}
-        />
+        {icon && (
+          <FontAwesomeIcon
+            icon={icon}
+            className={active ? "text-blue-700" : "text-gray-400"}
+          />
+        )}
         <span>{label}</span>
       </button>
     );
@@ -95,17 +197,18 @@ class ResidentDashboardHeader extends React.Component {
     const {
       userName,
       userPhotoUrl,
-      showProfileMenu,
-      onProfileMenuClick,
       activeTab,
+      showProfileSection = true,
     } = this.props;
     const { isMobileMenuOpen } = this.state;
+    const navItems = this.getNavigationItems();
+    const isProfileMenuOpen = this.isProfileMenuVisible();
 
     const renderProfileSection = (isMobile = false) => (
       <div className='relative shrink-0'>
         <div
           className='flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-1 pr-3 rounded-full transition-colors'
-          onClick={onProfileMenuClick}
+          onClick={this.handleProfileMenuClick}
         >
           <div className='w-8 h-8 rounded-full flex items-center justify-center border border-blue-200 overflow-hidden'>
             {userPhotoUrl ? (
@@ -131,7 +234,7 @@ class ResidentDashboardHeader extends React.Component {
           <FontAwesomeIcon
             icon={faChevronDown}
             className={`text-[10px] text-gray-400 transition-transform ${
-              showProfileMenu ? "rotate-180" : ""
+              isProfileMenuOpen ? "rotate-180" : ""
             }`}
           />
         </div>
@@ -157,41 +260,13 @@ class ResidentDashboardHeader extends React.Component {
           </div>
 
           <nav className='hidden lg:flex flex-1 py-1 items-center justify-center gap-2 overflow-x-auto'>
-            {this.renderTabItem(
-              faHouse,
-              "Dashboard",
-              "dashboard",
-              activeTab === "dashboard",
-            )}
-            {this.renderTabItem(
-              faBell,
-              "Alerts",
-              "alerts",
-              activeTab === "alerts",
-            )}
-            {this.renderTabItem(
-              faMapLocationDot,
-              "Evac Plan",
-              "evac-plan",
-              activeTab === "evac-plan",
-            )}
-            {this.renderTabItem(
-              faBookOpen,
-              "Resources",
-              "resources",
-              activeTab === "resources",
-            )}
-            {this.renderTabItem(
-              faAddressBook,
-              "Contacts",
-              "contacts",
-              activeTab === "contacts",
-            )}
-            {this.renderTabItem(
-              faUsersViewfinder,
-              "Sectors",
-              "sectors",
-              activeTab === "sectors",
+            {navItems.map((item) =>
+              this.renderTabItem(
+                item.icon,
+                item.label,
+                item.key,
+                activeTab === item.key,
+              ),
             )}
           </nav>
 
@@ -208,54 +283,32 @@ class ResidentDashboardHeader extends React.Component {
               </span>
             </button>
 
-            <div className='hidden lg:block'>{renderProfileSection(false)}</div>
+            {showProfileSection && (
+              <div className='hidden lg:block'>
+                {renderProfileSection(false)}
+              </div>
+            )}
           </div>
         </div>
 
         {isMobileMenuOpen && (
           <nav className='lg:hidden mt-3 pt-3 border-t border-gray-200 flex flex-col items-stretch gap-2 px-6 pb-3'>
-            <div className='border-b border-gray-200 pb-3 mb-1'>
-              <p className='px-1 pb-2 text-[11px] font-bold uppercase text-gray-500'>
-                Profile
-              </p>
-              {renderProfileSection(true)}
-            </div>
+            {showProfileSection && (
+              <div className='border-b border-gray-200 pb-3 mb-1'>
+                <p className='px-1 pb-2 text-[11px] font-bold uppercase text-gray-500'>
+                  Profile
+                </p>
+                {renderProfileSection(true)}
+              </div>
+            )}
 
-            {this.renderTabItem(
-              faHouse,
-              "Dashboard",
-              "dashboard",
-              activeTab === "dashboard",
-            )}
-            {this.renderTabItem(
-              faBell,
-              "Alerts",
-              "alerts",
-              activeTab === "alerts",
-            )}
-            {this.renderTabItem(
-              faMapLocationDot,
-              "Evac Plan",
-              "evac-plan",
-              activeTab === "evac-plan",
-            )}
-            {this.renderTabItem(
-              faBookOpen,
-              "Resources",
-              "resources",
-              activeTab === "resources",
-            )}
-            {this.renderTabItem(
-              faAddressBook,
-              "Contacts",
-              "contacts",
-              activeTab === "contacts",
-            )}
-            {this.renderTabItem(
-              faUsersViewfinder,
-              "Sectors",
-              "sectors",
-              activeTab === "sectors",
+            {navItems.map((item) =>
+              this.renderTabItem(
+                item.icon,
+                item.label,
+                item.key,
+                activeTab === item.key,
+              ),
             )}
           </nav>
         )}

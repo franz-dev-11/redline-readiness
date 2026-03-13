@@ -458,10 +458,14 @@ class ResidentEvacPlan extends React.Component {
 
           <div className='mt-4 grid grid-cols-1 md:grid-cols-2 gap-3'>
             <div>
-              <label className='text-xs font-black text-slate-500 uppercase tracking-wide'>
+              <label
+                htmlFor='evac-disaster-type'
+                className='text-xs font-black text-slate-500 uppercase tracking-wide'
+              >
                 Disaster Type
               </label>
               <select
+                id='evac-disaster-type'
                 value={disasterType}
                 onChange={this.handleDisasterTypeChange}
                 className='mt-1 w-full px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700'
@@ -501,6 +505,7 @@ class ResidentEvacPlan extends React.Component {
               <button
                 key={phase.key}
                 onClick={() => this.handleGuidePhaseChange(phase.key)}
+                aria-pressed={guidePhase === phase.key}
                 className={`px-3 py-1.5 rounded-full text-xs font-black uppercase transition-colors ${
                   guidePhase === phase.key
                     ? "bg-blue-700 text-white"
@@ -573,10 +578,14 @@ class ResidentEvacPlan extends React.Component {
           </p>
 
           <div className='mt-4'>
-            <label className='text-xs font-black text-slate-500 uppercase tracking-wide'>
+            <label
+              htmlFor='evac-meeting-point'
+              className='text-xs font-black text-slate-500 uppercase tracking-wide'
+            >
               Assigned Meeting Point
             </label>
             <input
+              id='evac-meeting-point'
               type='text'
               value={meetingPoint}
               onChange={this.handleMeetingPointChange}
@@ -607,6 +616,7 @@ class ResidentEvacPlan extends React.Component {
                       )
                     }
                     placeholder='Member name'
+                    aria-label='Family member name'
                     className='px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700'
                   />
                   <select
@@ -618,6 +628,7 @@ class ResidentEvacPlan extends React.Component {
                         event.target.value,
                       )
                     }
+                    aria-label='Assign evacuation center for this member'
                     className='px-3 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700'
                   >
                     <option value=''>Assign center per member</option>

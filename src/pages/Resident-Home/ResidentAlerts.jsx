@@ -628,7 +628,7 @@ class ResidentAlerts extends React.Component {
     );
 
     const renderHistoryItem = (item) => (
-      <div
+      <article
         key={item.id}
         className='border border-slate-200 rounded-xl px-4 py-3 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-2'
       >
@@ -659,7 +659,7 @@ class ResidentAlerts extends React.Component {
             {resolvingAlertId === item.id ? "Resolving..." : "Resolve"}
           </button>
         )}
-      </div>
+      </article>
     );
 
     return (
@@ -711,7 +711,7 @@ class ResidentAlerts extends React.Component {
             </select>
           </div>
 
-          <div className='mt-4 flex items-center gap-3'>
+          <div className='mt-4 flex items-center gap-3' aria-live='polite'>
             <button
               onClick={this.handleTriggerSOS}
               disabled={

@@ -206,15 +206,19 @@ class ResidentDashboardHeader extends React.Component {
 
     const renderProfileSection = (isMobile = false) => (
       <div className='relative shrink-0'>
-        <div
+        <button
+          type='button'
           className='flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-1 pr-3 rounded-full transition-colors'
           onClick={this.handleProfileMenuClick}
+          aria-label={`Profile menu for ${userName}`}
+          aria-haspopup='true'
+          aria-expanded={isProfileMenuOpen}
         >
           <div className='w-8 h-8 rounded-full flex items-center justify-center border border-blue-200 overflow-hidden'>
             {userPhotoUrl ? (
               <img
                 src={userPhotoUrl}
-                alt='Profile'
+                alt={`${userName}'s profile photo`}
                 className='w-full h-full object-cover'
               />
             ) : (
@@ -237,7 +241,7 @@ class ResidentDashboardHeader extends React.Component {
               isProfileMenuOpen ? "rotate-180" : ""
             }`}
           />
-        </div>
+        </button>
         {this.renderProfileMenu(isMobile)}
       </div>
     );
@@ -252,10 +256,10 @@ class ResidentDashboardHeader extends React.Component {
               className='w-10 h-10 object-contain'
             />
             <div>
-              <h1 className='text-2xl font-bold text-[#3a4a5b] tracking-tight'>
+              <p className='text-2xl font-bold text-[#3a4a5b] tracking-tight'>
                 Redline{" "}
                 <span className='font-normal text-gray-500'>Readiness</span>
-              </h1>
+              </p>
             </div>
           </div>
 

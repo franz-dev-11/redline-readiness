@@ -215,6 +215,7 @@ class ResidentResources extends React.Component {
                 </div>
                 <a
                   href={`tel:${this.toDialNumber(hotline.phone)}`}
+                  aria-label={`Call ${hotline.name}`}
                   className='text-xs font-black uppercase bg-blue-700 text-white px-3 py-2 rounded-lg hover:bg-blue-800'
                 >
                   Call
@@ -291,6 +292,7 @@ class ResidentResources extends React.Component {
               <button
                 key={option.key}
                 onClick={() => this.handleToggleAccessibility(option.key)}
+                aria-pressed={accessibility[option.key]}
                 className='w-full border border-slate-200 rounded-xl px-4 py-3 bg-slate-50 flex items-center justify-between hover:border-blue-200 transition-colors'
               >
                 <span className='text-sm font-black text-slate-700 flex items-center gap-2'>
@@ -356,6 +358,7 @@ class ResidentResources extends React.Component {
                     href={guide.url}
                     target='_blank'
                     rel='noreferrer'
+                    aria-label={`View ${guide.title}`}
                     className='text-xs font-black uppercase border border-slate-300 text-slate-700 px-3 py-2 rounded-lg hover:border-blue-300 hover:text-blue-700'
                   >
                     <FontAwesomeIcon icon={faEye} className='mr-2' />
@@ -366,6 +369,7 @@ class ResidentResources extends React.Component {
                     target='_blank'
                     rel='noreferrer'
                     download
+                    aria-label={`Download ${guide.title}`}
                     className='text-xs font-black uppercase bg-blue-700 text-white px-3 py-2 rounded-lg hover:bg-blue-800'
                   >
                     <FontAwesomeIcon icon={faDownload} className='mr-2' />

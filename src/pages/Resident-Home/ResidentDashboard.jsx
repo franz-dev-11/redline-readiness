@@ -2112,6 +2112,12 @@ class ResidentDashboard extends React.Component {
         style={accessibilityContainer.style}
         aria-live={accessibilityContainer.ariaLive}
       >
+        <a
+          href='#main-content'
+          className='sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-9999 focus:bg-white focus:px-4 focus:py-2 focus:rounded-lg focus:text-blue-700 focus:font-bold focus:shadow-lg focus:border focus:border-blue-200'
+        >
+          Skip to main content
+        </a>
         <Header
           sticky={true}
           centerContent={
@@ -2159,15 +2165,19 @@ class ResidentDashboard extends React.Component {
               className='relative shrink-0'
               onClick={(event) => event.stopPropagation()}
             >
-              <div
+              <button
+                type='button'
                 className='flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-1 pr-3 rounded-full transition-colors'
                 onClick={this.handleProfileMenuClick}
+                aria-label={`Profile menu for ${userName}`}
+                aria-haspopup='true'
+                aria-expanded={showProfileMenu}
               >
                 <div className='w-8 h-8 rounded-full flex items-center justify-center border border-blue-200 overflow-hidden'>
                   {userPhotoUrl ? (
                     <img
                       src={userPhotoUrl}
-                      alt='Profile'
+                      alt={`${userName}'s profile photo`}
                       className='w-full h-full object-cover'
                     />
                   ) : (
@@ -2190,7 +2200,7 @@ class ResidentDashboard extends React.Component {
                     showProfileMenu ? "rotate-180" : ""
                   }`}
                 />
-              </div>
+              </button>
 
               {showProfileMenu && (
                 <>
@@ -2265,7 +2275,7 @@ class ResidentDashboard extends React.Component {
           }
         />
 
-        <div className='px-3 py-4 lg:px-4 lg:py-5'>
+        <div id='main-content' className='px-3 py-4 lg:px-4 lg:py-5'>
           <div className='w-full space-y-6'>
             {(() => {
               const activeDisasterAnnouncements = emergencyEvents.filter(
@@ -2633,6 +2643,7 @@ class ResidentDashboard extends React.Component {
                               <input
                                 type='text'
                                 placeholder='Search within map...'
+                                aria-label='Search evacuation centers'
                                 className='w-full pl-9 pr-10 py-2 bg-white/95 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-200 backdrop-blur-sm'
                                 value={searchQuery}
                                 onChange={(e) =>
@@ -2646,6 +2657,7 @@ class ResidentDashboard extends React.Component {
                             <button
                               onClick={this.handleLocateUser}
                               title='Locate my current position'
+                              aria-label='Locate my current position'
                               className='bg-white/95 border border-slate-200 p-2 rounded-xl text-blue-700 hover:bg-blue-50 transition-colors backdrop-blur-sm w-10 h-10 flex items-center justify-center'
                             >
                               <FontAwesomeIcon
@@ -2731,9 +2743,12 @@ class ResidentDashboard extends React.Component {
                             <p className='text-[10px] font-bold text-slate-500 tracking-widest uppercase'>
                               Sta. Maria Municipal Hall
                             </p>
-                            <p className='text-sm font-black text-slate-700 underline decoration-blue-200'>
+                            <a
+                              href='tel:+6944812 3400'
+                              className='text-sm font-black text-slate-700 underline decoration-blue-200 hover:text-blue-700'
+                            >
                               +69 44 812 3400
-                            </p>
+                            </a>
                             <div className='mt-3'>
                               <label
                                 htmlFor='sos-disaster-type'
@@ -2815,9 +2830,12 @@ class ResidentDashboard extends React.Component {
                           <p className='text-[10px] font-bold text-slate-500 tracking-widest uppercase'>
                             Sta. Maria Municipal Hall
                           </p>
-                          <p className='text-sm font-black text-slate-700 underline decoration-blue-200'>
+                          <a
+                            href='tel:+69448123400'
+                            className='text-sm font-black text-slate-700 underline decoration-blue-200 hover:text-blue-700'
+                          >
                             +69 44 812 3400
-                          </p>
+                          </a>
                           <div className='mt-3'>
                             <label
                               htmlFor='sos-disaster-type-mobile'
@@ -2890,6 +2908,8 @@ class ResidentDashboard extends React.Component {
                         <button
                           className='relative focus:outline-none'
                           onClick={this.toggleNotificationWidgetCollapsed}
+                          aria-label={notificationWidgetCollapsed ? `Show notifications${notificationItems.length > 0 ? `, ${notificationItems.length} unread` : ''}` : 'Hide notifications'}
+                          aria-expanded={!notificationWidgetCollapsed}
                           title={
                             notificationWidgetCollapsed
                               ? "Show notifications"

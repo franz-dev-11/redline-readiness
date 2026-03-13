@@ -85,7 +85,7 @@ class Header extends React.Component {
               className='w-10 h-10 object-contain'
             />
             <div>
-              <h1 className='text-2xl font-bold text-[#3a4a5b] tracking-tight'>
+              <p className='text-2xl font-bold text-[#3a4a5b] tracking-tight'>
                 {title.split(" ").map((word, idx) => (
                   <span key={idx}>
                     {idx === 1 ? (
@@ -95,7 +95,7 @@ class Header extends React.Component {
                     )}{" "}
                   </span>
                 ))}
-              </h1>
+              </p>
               {subtitle && (
                 <div className='text-xs text-gray-500'>{subtitle}</div>
               )}

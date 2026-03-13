@@ -259,6 +259,7 @@ class ResidentSectors extends React.Component {
               <button
                 key={filter.key}
                 onClick={() => this.handleFilterChange(filter.key)}
+                aria-pressed={selectedDisabilityFilter === filter.key}
                 className={`px-3 py-1.5 rounded-full text-xs font-black uppercase ${
                   selectedDisabilityFilter === filter.key
                     ? "bg-blue-700 text-white"
@@ -315,6 +316,7 @@ class ResidentSectors extends React.Component {
                 <button
                   key={item.key}
                   onClick={() => this.handleToggleNeed(item.key)}
+                  aria-pressed={accessibilityNeeds[item.key]}
                   className='w-full border border-slate-200 rounded-xl px-4 py-3 bg-slate-50 flex items-center justify-between hover:border-blue-200'
                 >
                   <span className='text-sm font-black text-slate-700 flex items-center gap-2'>

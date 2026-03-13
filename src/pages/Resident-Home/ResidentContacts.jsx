@@ -4,8 +4,9 @@ import { faPhoneVolume, faHospital, faShieldHeart } from "@fortawesome/free-soli
 
 class ResidentContacts extends React.Component {
   renderContact(label, number, icon) {
+    const dialNumber = number.replace(/[^+\d]/g, '');
     return (
-      <div className='border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3'>
+      <li className='border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3'>
         <div className='flex items-center gap-3'>
           <div className='w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700'>
             <FontAwesomeIcon icon={icon} />
@@ -15,8 +16,14 @@ class ResidentContacts extends React.Component {
             <p className='text-xs text-slate-500'>Emergency line</p>
           </div>
         </div>
-        <p className='text-sm font-black text-slate-700'>{number}</p>
-      </div>
+        <a
+          href={`tel:${dialNumber}`}
+          aria-label={`Call ${label} at ${number}`}
+          className='text-sm font-black text-slate-700 hover:text-blue-700 hover:underline underline-offset-2'
+        >
+          {number}
+        </a>
+      </li>
     );
   }
 
@@ -30,11 +37,11 @@ class ResidentContacts extends React.Component {
           Sample emergency contact directory for residents.
         </p>
 
-        <div className='mt-5 space-y-3'>
+        <ul className='mt-5 space-y-3 list-none p-0'>
           {this.renderContact("Municipal DRRMO", "+63 44 812 3400", faShieldHeart)}
           {this.renderContact("Local Rescue Team", "+63 44 811 2299", faPhoneVolume)}
           {this.renderContact("Municipal Hospital", "+63 44 812 1188", faHospital)}
-        </div>
+        </ul>
       </section>
     );
   }

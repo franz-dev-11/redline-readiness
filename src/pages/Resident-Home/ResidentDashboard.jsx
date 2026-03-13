@@ -2084,12 +2084,12 @@ class ResidentDashboard extends React.Component {
     const activeGovDisasterAnnouncement =
       emergencyEvents.find(
         (ev) =>
-          ev.type === 'announcement' &&
-          ev.announcementType === 'disaster' &&
-          ev.status !== 'resolved',
+          ev.type === "announcement" &&
+          ev.announcementType === "disaster" &&
+          ev.status !== "resolved",
       ) || null;
     const activeGovDisasterType = String(
-      activeGovDisasterAnnouncement?.disasterType || '',
+      activeGovDisasterAnnouncement?.disasterType || "",
     )
       .trim()
       .toLowerCase();
@@ -2097,11 +2097,12 @@ class ResidentDashboard extends React.Component {
       ? SOS_GUIDE_BY_DISASTER[activeGovDisasterType] ||
         SOS_GUIDE_BY_DISASTER.other
       : null;
-    const activeGovDisasterLabel = activeGovDisasterAnnouncement?.disasterTypeLabel
-      ? activeGovDisasterAnnouncement.disasterTypeLabel
-      : activeGovDisasterType
-        ? getDisasterTypeLabel(activeGovDisasterType)
-        : '';
+    const activeGovDisasterLabel =
+      activeGovDisasterAnnouncement?.disasterTypeLabel
+        ? activeGovDisasterAnnouncement.disasterTypeLabel
+        : activeGovDisasterType
+          ? getDisasterTypeLabel(activeGovDisasterType)
+          : "";
     const accessibilityContainer = getAccessibilityContainerProps(
       accessibilitySettings,
     );
@@ -2269,9 +2270,9 @@ class ResidentDashboard extends React.Component {
             {(() => {
               const activeDisasterAnnouncements = emergencyEvents.filter(
                 (event) =>
-                  event.type === 'announcement' &&
-                  event.announcementType === 'disaster' &&
-                  event.status !== 'resolved',
+                  event.type === "announcement" &&
+                  event.announcementType === "disaster" &&
+                  event.status !== "resolved",
               );
               if (activeDisasterAnnouncements.length === 0) return null;
               const latest = activeDisasterAnnouncements[0];
@@ -2279,16 +2280,19 @@ class ResidentDashboard extends React.Component {
               const disasterLabel =
                 latest.disasterTypeLabel ||
                 (latest.disasterType
-                  ? String(latest.disasterType).charAt(0).toUpperCase() + String(latest.disasterType).slice(1)
-                  : 'Disaster');
+                  ? String(latest.disasterType).charAt(0).toUpperCase() +
+                    String(latest.disasterType).slice(1)
+                  : "Disaster");
               return (
                 <div
                   className='fixed inset-0 z-[9999] flex items-center justify-center'
-                  style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+                  style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
                 >
                   <div className='relative bg-white rounded-2xl shadow-2xl border-2 border-red-500 w-full max-w-md mx-4 px-7 py-7'>
                     <button
-                      onClick={() => this.setState({ disasterAlertDismissedId: latest.id })}
+                      onClick={() =>
+                        this.setState({ disasterAlertDismissedId: latest.id })
+                      }
                       className='absolute top-3 right-4 text-gray-400 hover:text-gray-700 text-xl font-bold leading-none'
                       aria-label='Dismiss'
                     >
@@ -2311,16 +2315,19 @@ class ResidentDashboard extends React.Component {
                       </div>
                     </div>
                     <p className='text-base font-black text-red-800 uppercase tracking-tight mb-2'>
-                      {latest.alertTitle || 'Official Disaster Announcement'}
+                      {latest.alertTitle || "Official Disaster Announcement"}
                     </p>
                     <p className='text-sm font-medium text-slate-700 leading-relaxed'>
-                      {latest.message || 'An official disaster announcement has been issued by your LGU. Please follow evacuation instructions.'}
+                      {latest.message ||
+                        "An official disaster announcement has been issued by your LGU. Please follow evacuation instructions."}
                     </p>
                     <p className='text-[11px] font-bold text-red-500 uppercase mt-3'>
-                      Issued by: {latest.userName || 'LGU'}
+                      Issued by: {latest.userName || "LGU"}
                     </p>
                     <button
-                      onClick={() => this.setState({ disasterAlertDismissedId: latest.id })}
+                      onClick={() =>
+                        this.setState({ disasterAlertDismissedId: latest.id })
+                      }
                       className='mt-5 w-full py-2.5 rounded-xl bg-red-600 text-white text-sm font-black uppercase hover:bg-red-700 transition-colors'
                     >
                       Acknowledge &amp; Close
@@ -2426,19 +2433,21 @@ class ResidentDashboard extends React.Component {
                               {activeGovDisasterGuide.title}
                             </h4>
                             <div className='mt-2 space-y-2'>
-                              {activeGovDisasterGuide.steps.map((step, index) => (
-                                <div
-                                  key={`gov-${activeGovDisasterType}-guide-${index}`}
-                                  className='flex gap-2'
-                                >
-                                  <div className='mt-0.5 h-5 w-5 rounded-full bg-white border border-orange-200 text-orange-600 text-[10px] font-black flex items-center justify-center shrink-0'>
-                                    {index + 1}
+                              {activeGovDisasterGuide.steps.map(
+                                (step, index) => (
+                                  <div
+                                    key={`gov-${activeGovDisasterType}-guide-${index}`}
+                                    className='flex gap-2'
+                                  >
+                                    <div className='mt-0.5 h-5 w-5 rounded-full bg-white border border-orange-200 text-orange-600 text-[10px] font-black flex items-center justify-center shrink-0'>
+                                      {index + 1}
+                                    </div>
+                                    <p className='text-xs font-medium text-slate-700 leading-relaxed'>
+                                      {step}
+                                    </p>
                                   </div>
-                                  <p className='text-xs font-medium text-slate-700 leading-relaxed'>
-                                    {step}
-                                  </p>
-                                </div>
-                              ))}
+                                ),
+                              )}
                             </div>
                           </div>
                         ) : null}
@@ -2475,30 +2484,47 @@ class ResidentDashboard extends React.Component {
                           {(() => {
                             const activeDis = emergencyEvents.filter(
                               (ev) =>
-                                ev.type === 'announcement' &&
-                                ev.announcementType === 'disaster' &&
-                                ev.status !== 'resolved',
+                                ev.type === "announcement" &&
+                                ev.announcementType === "disaster" &&
+                                ev.status !== "resolved",
                             );
                             if (activeDis.length === 0) return null;
                             const latest = activeDis[0];
-                            if (disasterAlertDismissedId !== latest.id) return null;
+                            if (disasterAlertDismissedId !== latest.id)
+                              return null;
                             const disLabel =
                               latest.disasterTypeLabel ||
                               (latest.disasterType
-                                ? String(latest.disasterType).charAt(0).toUpperCase() + String(latest.disasterType).slice(1)
-                                : 'Disaster');
+                                ? String(latest.disasterType)
+                                    .charAt(0)
+                                    .toUpperCase() +
+                                  String(latest.disasterType).slice(1)
+                                : "Disaster");
                             return (
                               <div
                                 className='absolute top-3 right-3 z-10 bg-white border-2 border-red-500 rounded-xl shadow-lg px-3 py-2.5 max-w-[220px] cursor-pointer hover:bg-red-50 transition-colors'
-                                onClick={() => this.setState({ disasterAlertDismissedId: null })}
+                                onClick={() =>
+                                  this.setState({
+                                    disasterAlertDismissedId: null,
+                                  })
+                                }
                                 title='Click to view disaster alert'
                               >
                                 <div className='flex items-center gap-2 mb-1'>
-                                  <FontAwesomeIcon icon={faTriangleExclamation} className='text-red-600 text-sm animate-pulse flex-shrink-0' />
-                                  <span className='text-[10px] font-black text-red-600 uppercase tracking-wide'>Disaster Alert</span>
+                                  <FontAwesomeIcon
+                                    icon={faTriangleExclamation}
+                                    className='text-red-600 text-sm animate-pulse flex-shrink-0'
+                                  />
+                                  <span className='text-[10px] font-black text-red-600 uppercase tracking-wide'>
+                                    Disaster Alert
+                                  </span>
                                 </div>
-                                <p className='text-[11px] font-black text-slate-800 uppercase leading-tight'>{latest.alertTitle || 'Official Announcement'}</p>
-                                <p className='text-[10px] font-semibold text-red-500 uppercase mt-0.5'>{disLabel}</p>
+                                <p className='text-[11px] font-black text-slate-800 uppercase leading-tight'>
+                                  {latest.alertTitle || "Official Announcement"}
+                                </p>
+                                <p className='text-[10px] font-semibold text-red-500 uppercase mt-0.5'>
+                                  {disLabel}
+                                </p>
                               </div>
                             );
                           })()}
@@ -2864,9 +2890,16 @@ class ResidentDashboard extends React.Component {
                         <button
                           className='relative focus:outline-none'
                           onClick={this.toggleNotificationWidgetCollapsed}
-                          title={notificationWidgetCollapsed ? 'Show notifications' : 'Hide notifications'}
+                          title={
+                            notificationWidgetCollapsed
+                              ? "Show notifications"
+                              : "Hide notifications"
+                          }
                         >
-                          <FontAwesomeIcon icon={faBell} className='text-blue-700' />
+                          <FontAwesomeIcon
+                            icon={faBell}
+                            className='text-blue-700'
+                          />
                           {notificationItems.length > 0 && (
                             <span className='absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5'>
                               {notificationItems.length}
@@ -2876,55 +2909,55 @@ class ResidentDashboard extends React.Component {
                       </div>
 
                       {!notificationWidgetCollapsed && (
-                      <div className='bg-white border border-gray-200 rounded-lg p-4 shadow-sm'>
-                      <h3 className='text-xs font-black text-slate-700 uppercase tracking-tight mb-3'>
-                        Notifications Widget
-                      </h3>
-                      {(
-                        <>
-                          <p className='text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-3'>
-                            Alerts & announcements
-                          </p>
-                          <div className='space-y-2'>
-                            {notificationItems.map((item) => (
-                              <div
-                                key={item.id}
-                                className='rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2'
-                              >
-                                <p className='text-[10px] font-black text-slate-800 uppercase flex items-center gap-1'>
-                                  <FontAwesomeIcon
-                                    icon={
-                                      item.type === "announcement"
-                                        ? faBullhorn
-                                        : faShieldHeart
-                                    }
-                                    className={
-                                      item.type === "sos"
-                                        ? "text-red-600"
-                                        : "text-blue-700"
-                                    }
-                                  />
-                                  {item.title}
-                                </p>
-                                <p className='text-[10px] font-medium text-slate-600 mt-0.5'>
-                                  {item.description}
-                                </p>
-                                {item.disasterTypeLabel && (
-                                  <p className='text-[9px] font-black text-red-600 mt-1 uppercase'>
-                                    Disaster type: {item.disasterTypeLabel}
-                                  </p>
-                                )}
-                                {item.meta && (
-                                  <p className='text-[9px] font-semibold text-slate-400 mt-1 uppercase'>
-                                    {item.meta}
-                                  </p>
-                                )}
+                        <div className='bg-white border border-gray-200 rounded-lg p-4 shadow-sm'>
+                          <h3 className='text-xs font-black text-slate-700 uppercase tracking-tight mb-3'>
+                            Notifications Widget
+                          </h3>
+                          {
+                            <>
+                              <p className='text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-3'>
+                                Alerts & announcements
+                              </p>
+                              <div className='space-y-2'>
+                                {notificationItems.map((item) => (
+                                  <div
+                                    key={item.id}
+                                    className='rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2'
+                                  >
+                                    <p className='text-[10px] font-black text-slate-800 uppercase flex items-center gap-1'>
+                                      <FontAwesomeIcon
+                                        icon={
+                                          item.type === "announcement"
+                                            ? faBullhorn
+                                            : faShieldHeart
+                                        }
+                                        className={
+                                          item.type === "sos"
+                                            ? "text-red-600"
+                                            : "text-blue-700"
+                                        }
+                                      />
+                                      {item.title}
+                                    </p>
+                                    <p className='text-[10px] font-medium text-slate-600 mt-0.5'>
+                                      {item.description}
+                                    </p>
+                                    {item.disasterTypeLabel && (
+                                      <p className='text-[9px] font-black text-red-600 mt-1 uppercase'>
+                                        Disaster type: {item.disasterTypeLabel}
+                                      </p>
+                                    )}
+                                    {item.meta && (
+                                      <p className='text-[9px] font-semibold text-slate-400 mt-1 uppercase'>
+                                        {item.meta}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                      </div>
+                            </>
+                          }
+                        </div>
                       )}
                     </div>
 

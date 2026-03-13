@@ -4,6 +4,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 
@@ -40,6 +41,13 @@ class AuthService {
         email: user.email,
         ...userData,
         createdAt: new Date(),
+      });
+
+      // Write publicly-readable type index for password reset verification
+      await setDoc(doc(this.db, "userTypeIndex", user.uid), {
+        email: user.email.toLowerCase(),
+        accountType: userData.accountType || "",
+        userType: userData.userType || "",
       });
 
       return user;
@@ -150,6 +158,30 @@ class AuthService {
       this.currentUser = null;
     } catch (error) {
       throw new Error(`Logout failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Send a password reset email
+   * @param {string} email - User email
+   * @returns {Promise<void>}
+   */
+  /**
+   * Send a password reset email, verifying the account type first
+   * @param {string} email - User email
+   * @param {string[]} expectedTypes - Allowed accountType or userType values
+   * @param {string} accountLabel - Human-readable label for error message
+   * @returns {Promise<void>}
+   */
+  async sendPasswordReset(email) {
+    try {
+      await sendPasswordResetEmail(this.auth, email);
+    } catch (error) {
+      const code = error?.code || "";
+      if (code === "auth/user-not-found" || code === "auth/invalid-email") {
+        throw new Error("No account found with that email address.");
+      }
+      throw new Error("Could not send reset link. Please try again.");
     }
   }
 

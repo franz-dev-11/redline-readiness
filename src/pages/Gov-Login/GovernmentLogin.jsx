@@ -32,12 +32,18 @@ class GovernmentLogin extends React.Component {
       showPassword: false,
       error: "",
       isLoading: false,
+      forgotOpen: false,
+      forgotEmail: "",
+      forgotLoading: false,
+      forgotMessage: "",
+      forgotError: "",
     };
 
     // Bind methods
     this.handleInputChange = this.handleInputChange.bind(this);
     this.togglePasswordVisibility = this.togglePasswordVisibility.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
+    this.handleForgotSubmit = this.handleForgotSubmit.bind(this);
   }
 
   /**
@@ -61,6 +67,30 @@ class GovernmentLogin extends React.Component {
 
   /**
    * Handle login submission with admin detection
+   * @private
+   */
+  async handleForgotSubmit(e) {
+    e.preventDefault();
+    const { forgotEmail } = this.state;
+    this.setState({ forgotLoading: true, forgotError: "", forgotMessage: "" });
+    try {
+      await AuthService.sendPasswordReset(forgotEmail);
+      this.setState({
+        forgotLoading: false,
+        forgotMessage: "Reset link sent! Check your email inbox.",
+      });
+    } catch (err) {
+      this.setState({
+        forgotLoading: false,
+        forgotError:
+          err.message ||
+          "Could not send reset link. Make sure the email is correct.",
+      });
+    }
+  }
+
+  /**
+   * Handle login submission with admin detection (gov)
    * @private
    */
   async handleSubmit(e) {
@@ -147,7 +177,18 @@ class GovernmentLogin extends React.Component {
   }
 
   render() {
-    const { agencyId, password, showPassword, error, isLoading } = this.state;
+    const {
+      agencyId,
+      password,
+      showPassword,
+      error,
+      isLoading,
+      forgotOpen,
+      forgotEmail,
+      forgotLoading,
+      forgotMessage,
+      forgotError,
+    } = this.state;
     return (
       <div className='min-h-screen w-full flex items-stretch bg-[#8ea2b3] font-sans relative'>
         <button
@@ -215,18 +256,41 @@ class GovernmentLogin extends React.Component {
                 </span>
               </div>
 
+              <div className='flex justify-end'>
+                <button
+                  type='button'
+                  onClick={() =>
+                    this.setState({
+                      forgotOpen: true,
+                      forgotEmail: agencyId,
+                      forgotMessage: "",
+                      forgotError: "",
+                    })
+                  }
+                  className='text-xs text-gray-500 hover:text-black hover:underline mt-1'
+                >
+                  Forgot password?
+                </button>
+              </div>
+
               <button
                 type='submit'
                 disabled={isLoading}
-                className={`w-full bg-black text-white font-bold py-3 rounded shadow-lg transition-all active:scale-95 hover:bg-gray-800 disabled:cursor-not-allowed mt-2 ${isLoading ? 'opacity-100' : 'disabled:opacity-50'}`}
+                className={`w-full bg-black text-white font-bold py-3 rounded shadow-lg transition-all active:scale-95 hover:bg-gray-800 disabled:cursor-not-allowed mt-2 ${isLoading ? "opacity-100" : "disabled:opacity-50"}`}
               >
                 {isLoading ? (
                   <span className='flex items-center justify-center'>
-                    <svg className='windows-loading-spinner' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>
+                    <svg
+                      className='windows-loading-spinner'
+                      viewBox='0 0 16 16'
+                      xmlns='http://www.w3.org/2000/svg'
+                    >
                       <circle cx='8' cy='8' r='7' />
                     </svg>
                   </span>
-                ) : "Sign in with email"}
+                ) : (
+                  "Sign in with email"
+                )}
               </button>
             </form>
 
@@ -239,6 +303,81 @@ class GovernmentLogin extends React.Component {
                 Register Agency
               </button>
             </div>
+
+            {forgotOpen && (
+              <div
+                className='fixed inset-0 z-50 flex items-center justify-center'
+                style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+              >
+                <div className='bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 px-7 py-7'>
+                  <h2 className='text-lg font-black text-slate-800 mb-1'>
+                    Reset Password
+                  </h2>
+                  <p className='text-xs text-gray-500 mb-4'>
+                    Enter your agency email and we'll send you a reset link.
+                  </p>
+                  {forgotMessage && (
+                    <div className='bg-green-50 border-l-4 border-green-500 text-green-700 p-3 mb-3 text-xs font-medium rounded'>
+                      {forgotMessage}
+                    </div>
+                  )}
+                  {forgotError && (
+                    <div className='bg-red-50 border-l-4 border-red-500 text-red-700 p-3 mb-3 text-xs font-medium rounded'>
+                      {forgotError}
+                    </div>
+                  )}
+                  {!forgotMessage && (
+                    <form
+                      onSubmit={this.handleForgotSubmit}
+                      className='space-y-3'
+                    >
+                      <input
+                        required
+                        type='email'
+                        placeholder='Agency email address'
+                        value={forgotEmail}
+                        onChange={(e) =>
+                          this.setState({ forgotEmail: e.target.value })
+                        }
+                        className='w-full px-4 py-3 border border-gray-200 rounded bg-[#f3f4f6] text-sm focus:outline-none text-black focus:ring-2 focus:ring-red-200 placeholder-gray-400'
+                      />
+                      <button
+                        type='submit'
+                        disabled={forgotLoading}
+                        className={`w-full bg-black text-white font-bold py-3 rounded shadow-lg transition-all hover:bg-gray-800 disabled:cursor-not-allowed ${forgotLoading ? "opacity-100" : "disabled:opacity-60"}`}
+                      >
+                        {forgotLoading ? (
+                          <span className='flex items-center justify-center'>
+                            <svg
+                              className='windows-loading-spinner'
+                              viewBox='0 0 16 16'
+                              xmlns='http://www.w3.org/2000/svg'
+                            >
+                              <circle cx='8' cy='8' r='7' />
+                            </svg>
+                          </span>
+                        ) : (
+                          "Send Reset Link"
+                        )}
+                      </button>
+                    </form>
+                  )}
+                  <button
+                    type='button'
+                    onClick={() =>
+                      this.setState({
+                        forgotOpen: false,
+                        forgotMessage: "",
+                        forgotError: "",
+                      })
+                    }
+                    className='mt-4 w-full text-center text-xs text-gray-400 hover:text-black hover:underline'
+                  >
+                    {forgotMessage ? "Close" : "Cancel"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className='flex justify-center gap-4 mt-8 text-xs text-gray-400'>
               <span>Help</span>

@@ -912,9 +912,17 @@ class AdminDashboard extends React.Component {
             <button
               className='relative focus:outline-none'
               onClick={this.toggleEmergencyFeedCollapsed}
-              title={this.state.emergencyFeedCollapsed ? 'Show notifications' : 'Hide notifications'}
+              title={
+                this.state.emergencyFeedCollapsed
+                  ? "Show notifications"
+                  : "Hide notifications"
+              }
             >
-              <FontAwesomeIcon icon={faBell} className='text-blue-600' size='lg' />
+              <FontAwesomeIcon
+                icon={faBell}
+                className='text-blue-600'
+                size='lg'
+              />
               {recentFeedEvents && recentFeedEvents.length > 0 && (
                 <span className='absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5'>
                   {recentFeedEvents.length}
@@ -936,10 +944,17 @@ class AdminDashboard extends React.Component {
 
               {emergencyFeedLoading ? (
                 <div className='text-center py-6'>
-                  <FontAwesomeIcon icon={faSpinner} spin className='text-gray-400' size='lg' />
+                  <FontAwesomeIcon
+                    icon={faSpinner}
+                    spin
+                    className='text-gray-400'
+                    size='lg'
+                  />
                 </div>
               ) : recentFeedEvents.length === 0 ? (
-                <p className='text-sm text-gray-500'>No emergency events yet.</p>
+                <p className='text-sm text-gray-500'>
+                  No emergency events yet.
+                </p>
               ) : (
                 <div className='space-y-0'>
                   {activeFeedEvents.length > 0 && (
@@ -959,7 +974,9 @@ class AdminDashboard extends React.Component {
                         Resolved ({resolvedFeedEvents.length})
                       </summary>
                       <ul className='border-t border-gray-200'>
-                        {resolvedFeedEvents.map((event) => renderFeedCard(event))}
+                        {resolvedFeedEvents.map((event) =>
+                          renderFeedCard(event),
+                        )}
                       </ul>
                     </details>
                   )}

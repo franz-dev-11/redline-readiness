@@ -514,22 +514,52 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
             onClick={() => planFileInputRef.current?.click()}
             className='cursor-pointer border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-xl p-6 flex flex-col items-center justify-center gap-2 transition-colors bg-gray-50 hover:bg-blue-50 mb-3'
           >
-            <svg xmlns='http://www.w3.org/2000/svg' className='w-8 h-8 text-gray-400' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.5}>
-              <path strokeLinecap='round' strokeLinejoin='round' d='M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5' />
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              className='w-8 h-8 text-gray-400'
+              fill='none'
+              viewBox='0 0 24 24'
+              stroke='currentColor'
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                d='M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5'
+              />
             </svg>
-            <p className='text-sm font-semibold text-gray-600'>Click to select a file</p>
+            <p className='text-sm font-semibold text-gray-600'>
+              Click to select a file
+            </p>
             <p className='text-xs text-gray-400'>PDF, PNG, JPG, DOC, DOCX</p>
           </div>
 
           {planFile && (
             <div className='flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg mb-3'>
-              <svg xmlns='http://www.w3.org/2000/svg' className='w-4 h-4 text-blue-500 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
-                <path strokeLinecap='round' strokeLinejoin='round' d='M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13' />
+              <svg
+                xmlns='http://www.w3.org/2000/svg'
+                className='w-4 h-4 text-blue-500 flex-shrink-0'
+                fill='none'
+                viewBox='0 0 24 24'
+                stroke='currentColor'
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  d='M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13'
+                />
               </svg>
-              <span className='text-xs text-blue-700 font-medium truncate flex-1'>{planFile.name}</span>
+              <span className='text-xs text-blue-700 font-medium truncate flex-1'>
+                {planFile.name}
+              </span>
               <button
                 type='button'
-                onClick={() => { setPlanFile(null); if (planFileInputRef.current) planFileInputRef.current.value = ''; }}
+                onClick={() => {
+                  setPlanFile(null);
+                  if (planFileInputRef.current)
+                    planFileInputRef.current.value = "";
+                }}
                 className='text-gray-400 hover:text-red-500 text-base leading-none font-bold flex-shrink-0'
               >
                 ×
@@ -556,8 +586,12 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
                   className='flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5'
                 >
                   <div className='flex-1 min-w-0'>
-                    <p className='text-sm font-semibold text-[#3a4a5b] truncate'>{plan.fileName}</p>
-                    <p className='text-xs text-gray-500 mt-0.5'>{plan.uploadDate}</p>
+                    <p className='text-sm font-semibold text-[#3a4a5b] truncate'>
+                      {plan.fileName}
+                    </p>
+                    <p className='text-xs text-gray-500 mt-0.5'>
+                      {plan.uploadDate}
+                    </p>
                   </div>
                   {plan.fileUrl && (
                     <a

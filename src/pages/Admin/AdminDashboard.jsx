@@ -76,6 +76,7 @@ class AdminDashboard extends React.Component {
       emergencyEvents: [],
       emergencyFeedLoading: true,
       analyticsEmergencyEvents: [],
+      emergencyFeedCollapsed: true,
       responseResponders: [],
       responseTeams: [],
       responseDeployments: [],
@@ -116,8 +117,15 @@ class AdminDashboard extends React.Component {
       this.handleAdminProfileMenuToggle.bind(this);
     this.handleAdminProfileMenuClose =
       this.handleAdminProfileMenuClose.bind(this);
-    this.handleAdminDropdownLogout =
-      this.handleAdminDropdownLogout.bind(this);
+    this.handleAdminDropdownLogout = this.handleAdminDropdownLogout.bind(this);
+    this.toggleEmergencyFeedCollapsed =
+      this.toggleEmergencyFeedCollapsed.bind(this);
+  }
+
+  toggleEmergencyFeedCollapsed() {
+    this.setState((prev) => ({
+      emergencyFeedCollapsed: !prev.emergencyFeedCollapsed,
+    }));
   }
 
   getUserDisplayName(user) {
@@ -225,8 +233,8 @@ class AdminDashboard extends React.Component {
         const pendingAccounts = users.filter(
           (user) => user.role === "government" && user.status === "pending",
         );
-        const activeGovernment = users.filter(
-          (user) => this.isGovernmentAccountActive(user),
+        const activeGovernment = users.filter((user) =>
+          this.isGovernmentAccountActive(user),
         ).length;
 
         this.setState((prevState) => ({
@@ -245,7 +253,9 @@ class AdminDashboard extends React.Component {
           },
           loading: false,
           error:
-            prevState.error === "Failed to load users." ? null : prevState.error,
+            prevState.error === "Failed to load users."
+              ? null
+              : prevState.error,
         }));
       },
       (error) => {
@@ -561,7 +571,11 @@ class AdminDashboard extends React.Component {
     this.setState({ updatingUserStatusId: userId });
 
     try {
-      await AuthService.updateUserAccountStatus(userId, nextStatus, this.state.adminId);
+      await AuthService.updateUserAccountStatus(
+        userId,
+        nextStatus,
+        this.state.adminId,
+      );
       this.setState({ updatingUserStatusId: null });
     } catch (error) {
       console.error("Failed to update government account status:", error);
@@ -779,11 +793,11 @@ class AdminDashboard extends React.Component {
                 : "Location Share Active";
 
       return (
-        <div
+        <li
           key={event.id}
-          className='rounded-lg border border-gray-200 bg-gray-50 p-3'
+          className='flex items-start gap-3 px-4 py-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors'
         >
-          <p className='text-xs font-black uppercase text-[#3a4a5b] flex items-center gap-1'>
+          <div className='mt-0.5 shrink-0'>
             <FontAwesomeIcon
               icon={
                 event.type === "sos"
@@ -799,28 +813,33 @@ class AdminDashboard extends React.Component {
                     ? "text-green-600"
                     : "text-blue-600"
               }
+              size='sm'
             />
-            {eventTypeLabel}
-          </p>
-          <p className='text-sm font-bold text-gray-700 mt-1'>
-            {resolverDisplayName}
-          </p>
-          <p className='text-xs text-gray-500 mt-0.5'>
-            {event.type === "resolution"
-              ? `${
-                  event.resolutionNote || `Resolved by ${resolverDisplayName}`
-                } (${sourceTypeLabel})`
-              : event.type === "sos"
-                ? `${event.userName || "Resident"} triggered SOS at ${event.locationLabel || "Pinned location"}.`
-                : event.message ||
-                  (event.durationMinutes
-                    ? `${event.durationMinutes}-minute temporary share`
-                    : "Emergency update")}
-          </p>
-          <p className='text-[11px] text-gray-400 mt-1'>
+          </div>
+          <div className='flex-1 min-w-0'>
+            <p className='text-xs font-black uppercase text-[#3a4a5b]'>
+              {eventTypeLabel}
+              <span className='ml-2 font-semibold text-gray-500 normal-case'>
+                — {resolverDisplayName}
+              </span>
+            </p>
+            <p className='text-xs text-gray-500 mt-0.5 truncate'>
+              {event.type === "resolution"
+                ? `${
+                    event.resolutionNote || `Resolved by ${resolverDisplayName}`
+                  } (${sourceTypeLabel})`
+                : event.type === "sos"
+                  ? `${event.userName || "Resident"} triggered SOS at ${event.locationLabel || "Pinned location"}.`
+                  : event.message ||
+                    (event.durationMinutes
+                      ? `${event.durationMinutes}-minute temporary share`
+                      : "Emergency update")}
+            </p>
+          </div>
+          <p className='text-[10px] text-gray-400 shrink-0 mt-0.5'>
             {this.getEmergencyEventTimeLabel(event)}
           </p>
-        </div>
+        </li>
       );
     };
 
@@ -888,50 +907,63 @@ class AdminDashboard extends React.Component {
           </div>
         </div>
 
-        <div className='bg-white rounded-lg shadow-sm p-6 border border-gray-200 mb-6'>
-          <div className='flex items-center justify-between mb-4'>
-            <h2 className='text-lg font-black text-[#3a4a5b] flex items-center gap-2'>
-              <FontAwesomeIcon icon={faBell} className='text-blue-600' />
-              Emergency Event Feed
-            </h2>
-            <span className='text-xs font-bold text-gray-500 uppercase'>
-              SOS and location activity
-            </span>
+        <div className='mb-6'>
+          <div className='bg-white rounded-lg shadow-sm p-2 border border-gray-200 mb-2 w-fit'>
+            <button
+              className='relative focus:outline-none'
+              onClick={this.toggleEmergencyFeedCollapsed}
+              title={this.state.emergencyFeedCollapsed ? 'Show notifications' : 'Hide notifications'}
+            >
+              <FontAwesomeIcon icon={faBell} className='text-blue-600' size='lg' />
+              {recentFeedEvents && recentFeedEvents.length > 0 && (
+                <span className='absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5'>
+                  {recentFeedEvents.length}
+                </span>
+              )}
+            </button>
           </div>
 
-          {emergencyFeedLoading ? (
-            <div className='text-center py-6'>
-              <FontAwesomeIcon
-                icon={faSpinner}
-                spin
-                className='text-gray-400'
-                size='lg'
-              />
-            </div>
-          ) : recentFeedEvents.length === 0 ? (
-            <p className='text-sm text-gray-500'>No emergency events yet.</p>
-          ) : (
-            <div className='space-y-3'>
-              {activeFeedEvents.length > 0 && (
-                <>
-                  <p className='text-[10px] font-black text-red-600 uppercase tracking-wide'>
-                    Active
-                  </p>
-                  <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3'>
-                    {activeFeedEvents.map((event) => renderFeedCard(event))}
-                  </div>
-                </>
-              )}
+          {!this.state.emergencyFeedCollapsed && (
+            <div className='bg-white rounded-lg shadow-sm p-6 border border-gray-200'>
+              <div className='flex items-center justify-between mb-4'>
+                <h2 className='text-lg font-black text-[#3a4a5b]'>
+                  Emergency Event Feed
+                </h2>
+                <span className='text-xs font-bold text-gray-500 uppercase'>
+                  SOS and location activity
+                </span>
+              </div>
 
-              {resolvedFeedEvents.length > 0 && (
-                <details className='border border-gray-200 rounded-lg bg-gray-50/50'>
-                  <summary className='px-3 py-2 text-[10px] font-black text-gray-500 uppercase tracking-wide cursor-pointer select-none'>
-                    Resolved ({resolvedFeedEvents.length})
-                  </summary>
-                  <div className='p-3 pt-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3'>
-                    {resolvedFeedEvents.map((event) => renderFeedCard(event))}
-                  </div>
-                </details>
+              {emergencyFeedLoading ? (
+                <div className='text-center py-6'>
+                  <FontAwesomeIcon icon={faSpinner} spin className='text-gray-400' size='lg' />
+                </div>
+              ) : recentFeedEvents.length === 0 ? (
+                <p className='text-sm text-gray-500'>No emergency events yet.</p>
+              ) : (
+                <div className='space-y-0'>
+                  {activeFeedEvents.length > 0 && (
+                    <>
+                      <p className='text-[10px] font-black text-red-600 uppercase tracking-wide mb-1'>
+                        Active
+                      </p>
+                      <ul className='border border-gray-200 rounded-lg overflow-hidden mb-3'>
+                        {activeFeedEvents.map((event) => renderFeedCard(event))}
+                      </ul>
+                    </>
+                  )}
+
+                  {resolvedFeedEvents.length > 0 && (
+                    <details className='border border-gray-200 rounded-lg bg-gray-50/50'>
+                      <summary className='px-3 py-2 text-[10px] font-black text-gray-500 uppercase tracking-wide cursor-pointer select-none'>
+                        Resolved ({resolvedFeedEvents.length})
+                      </summary>
+                      <ul className='border-t border-gray-200'>
+                        {resolvedFeedEvents.map((event) => renderFeedCard(event))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -1290,7 +1322,10 @@ class AdminDashboard extends React.Component {
                             <button
                               type='button'
                               onClick={() =>
-                                this.handleGovernmentStatusChange(user.id, "active")
+                                this.handleGovernmentStatusChange(
+                                  user.id,
+                                  "active",
+                                )
                               }
                               disabled={
                                 updatingUserStatusId === user.id ||
@@ -1303,7 +1338,10 @@ class AdminDashboard extends React.Component {
                             <button
                               type='button'
                               onClick={() =>
-                                this.handleGovernmentStatusChange(user.id, "inactive")
+                                this.handleGovernmentStatusChange(
+                                  user.id,
+                                  "inactive",
+                                )
                               }
                               disabled={
                                 updatingUserStatusId === user.id ||
@@ -1319,7 +1357,10 @@ class AdminDashboard extends React.Component {
                             <button
                               type='button'
                               onClick={() =>
-                                this.handleGovernmentStatusChange(user.id, "active")
+                                this.handleGovernmentStatusChange(
+                                  user.id,
+                                  "active",
+                                )
                               }
                               disabled={
                                 updatingUserStatusId === user.id ||
@@ -1332,7 +1373,10 @@ class AdminDashboard extends React.Component {
                             <button
                               type='button'
                               onClick={() =>
-                                this.handleGovernmentStatusChange(user.id, "inactive")
+                                this.handleGovernmentStatusChange(
+                                  user.id,
+                                  "inactive",
+                                )
                               }
                               disabled={
                                 updatingUserStatusId === user.id ||
@@ -1433,7 +1477,9 @@ class AdminDashboard extends React.Component {
     );
     const availableSlots = Math.max(totalCapacity - totalHeadcount, 0);
     const occupancyRate =
-      totalCapacity > 0 ? Math.round((totalHeadcount / totalCapacity) * 100) : 0;
+      totalCapacity > 0
+        ? Math.round((totalHeadcount / totalCapacity) * 100)
+        : 0;
 
     return (
       <>
@@ -1465,8 +1511,7 @@ class AdminDashboard extends React.Component {
                   {residentCount}
                 </p>
                 <p className='text-xs text-blue-600 mt-1'>
-                  {formatShare(residentCount, stats.totalUsers)}
-                  % of total
+                  {formatShare(residentCount, stats.totalUsers)}% of total
                 </p>
               </div>
 
@@ -1478,8 +1523,7 @@ class AdminDashboard extends React.Component {
                   {governmentCount}
                 </p>
                 <p className='text-xs text-purple-600 mt-1'>
-                  {formatShare(governmentCount, stats.totalUsers)}
-                  % of total
+                  {formatShare(governmentCount, stats.totalUsers)}% of total
                 </p>
               </div>
 
@@ -1489,8 +1533,7 @@ class AdminDashboard extends React.Component {
                 </p>
                 <p className='text-3xl font-black text-red-700'>{adminCount}</p>
                 <p className='text-xs text-red-600 mt-1'>
-                  {formatShare(adminCount, stats.totalUsers)}
-                  % of total
+                  {formatShare(adminCount, stats.totalUsers)}% of total
                 </p>
               </div>
             </div>
@@ -1528,7 +1571,6 @@ class AdminDashboard extends React.Component {
                 </div>
               </div>
             </div>
-
           </div>
 
           {/* Account Types */}
@@ -1866,7 +1908,12 @@ class AdminDashboard extends React.Component {
   }
 
   render() {
-    const { adminName, activeView, accessibilitySettings, showAdminProfileMenu } = this.state;
+    const {
+      adminName,
+      activeView,
+      accessibilitySettings,
+      showAdminProfileMenu,
+    } = this.state;
     const accessibilityContainer = getAccessibilityContainerProps(
       accessibilitySettings,
     );
@@ -1880,34 +1927,34 @@ class AdminDashboard extends React.Component {
         {/* Header Component */}
         <Header
           sticky={true}
-            centerContent={
-              <>
-                {this.renderHeaderTabItem(
-                  faUserShield,
-                  "Dashboard",
-                  "dashboard",
-                  activeView === "dashboard",
-                )}
-                {this.renderHeaderTabItem(
-                  faUsers,
-                  "Users",
-                  "users",
-                  activeView === "users",
-                )}
-                {this.renderHeaderTabItem(
-                  faChartLine,
-                  "Analytics",
-                  "analytics",
-                  activeView === "analytics",
-                )}
-                {this.renderHeaderTabItem(
-                  faShieldHeart,
-                  "Settings",
-                  "settings",
-                  activeView === "settings",
-                )}
-              </>
-            }
+          centerContent={
+            <>
+              {this.renderHeaderTabItem(
+                faUserShield,
+                "Dashboard",
+                "dashboard",
+                activeView === "dashboard",
+              )}
+              {this.renderHeaderTabItem(
+                faUsers,
+                "Users",
+                "users",
+                activeView === "users",
+              )}
+              {this.renderHeaderTabItem(
+                faChartLine,
+                "Analytics",
+                "analytics",
+                activeView === "analytics",
+              )}
+              {this.renderHeaderTabItem(
+                faShieldHeart,
+                "Settings",
+                "settings",
+                activeView === "settings",
+              )}
+            </>
+          }
           rightContent={
             <div
               className='relative shrink-0'
@@ -1987,7 +2034,6 @@ class AdminDashboard extends React.Component {
             {activeView === "settings" && this.renderSettingsView()}
           </div>
         </div>
-
       </div>
     );
   }

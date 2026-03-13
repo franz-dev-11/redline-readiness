@@ -184,9 +184,15 @@ class FamilyLogin extends React.Component {
               <button
                 type='submit'
                 disabled={loading}
-                className='w-full bg-black text-white font-bold py-3 rounded shadow-lg transition-all active:scale-95 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed mt-2'
+                className={`w-full bg-black text-white font-bold py-3 rounded shadow-lg transition-all active:scale-95 hover:bg-gray-800 disabled:cursor-not-allowed mt-2 ${loading ? 'opacity-100' : 'disabled:opacity-50'}`}
               >
-                {loading ? "Logging in..." : "Sign in with email"}
+                {loading ? (
+                  <span className='flex items-center justify-center'>
+                    <svg className='windows-loading-spinner' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>
+                      <circle cx='8' cy='8' r='7' />
+                    </svg>
+                  </span>
+                ) : "Sign in with email"}
               </button>
             </form>
             <div className='text-center mt-6 text-xs font-medium'>

@@ -26,6 +26,10 @@ import {
   faRoute,
   faClock,
   faCheckCircle,
+  faMapLocationDot,
+  faBookOpen,
+  faUsersViewfinder,
+  faChevronDown,
 } from "@fortawesome/free-solid-svg-icons";
 
 // Firebase imports
@@ -41,6 +45,7 @@ import {
 
 // Component imports
 import ResidentDashboardHeader from "../../components/ResidentDashboardHeader";
+import Header from "../../components/Header";
 import ResidentAlerts from "./ResidentAlerts";
 import ResidentEvacPlan from "./ResidentEvacPlan";
 import ResidentResources from "./ResidentResources";
@@ -358,6 +363,8 @@ class ResidentDashboard extends React.Component {
             "Sta. Maria Covered Court remains available for incoming residents.",
         },
       ],
+      notificationWidgetCollapsed: true,
+      disasterAlertDismissedId: null,
       // profileQrCode removed
     };
 
@@ -382,6 +389,8 @@ class ResidentDashboard extends React.Component {
       this.startEvacuationCapacityListener.bind(this);
     this.getEventTimeLabel = this.getEventTimeLabel.bind(this);
     this.getNotificationItems = this.getNotificationItems.bind(this);
+    this.toggleNotificationWidgetCollapsed =
+      this.toggleNotificationWidgetCollapsed.bind(this);
     this.getActiveSosEventForCurrentUser =
       this.getActiveSosEventForCurrentUser.bind(this);
     this.hasActiveSosForCurrentUser =
@@ -920,6 +929,12 @@ class ResidentDashboard extends React.Component {
     );
 
     return `${totalWindow} min temporary share • ${remaining} min left`;
+  }
+
+  toggleNotificationWidgetCollapsed() {
+    this.setState((prev) => ({
+      notificationWidgetCollapsed: !prev.notificationWidgetCollapsed,
+    }));
   }
 
   getNotificationItems() {
@@ -1999,6 +2014,25 @@ class ResidentDashboard extends React.Component {
     );
   }
 
+  renderHeaderTabItem(icon, label, tabKey, active = false) {
+    return (
+      <button
+        type='button'
+        key={tabKey}
+        onClick={() => this.handleTabChange(tabKey)}
+        className={`flex items-center gap-2 px-5 py-3 min-h-11 text-xs font-bold uppercase rounded-full transition-all whitespace-nowrap ${
+          active ? "text-blue-700" : "text-slate-500 hover:text-blue-700"
+        }`}
+      >
+        <FontAwesomeIcon
+          icon={icon}
+          className={active ? "text-blue-700" : "text-gray-400"}
+        />
+        <span>{label}</span>
+      </button>
+    );
+  }
+
   render() {
     const {
       userName,
@@ -2017,6 +2051,8 @@ class ResidentDashboard extends React.Component {
       evacuationArrival,
       confirmingArrivalCenterId,
       clearingArrival,
+      notificationWidgetCollapsed,
+      disasterAlertDismissedId,
     } = this.state;
     const centers = evacuationCenters;
     const selectedCenter =
@@ -2045,6 +2081,27 @@ class ResidentDashboard extends React.Component {
       : activeSosDisasterType
         ? getDisasterTypeLabel(activeSosDisasterType)
         : "";
+    const activeGovDisasterAnnouncement =
+      emergencyEvents.find(
+        (ev) =>
+          ev.type === 'announcement' &&
+          ev.announcementType === 'disaster' &&
+          ev.status !== 'resolved',
+      ) || null;
+    const activeGovDisasterType = String(
+      activeGovDisasterAnnouncement?.disasterType || '',
+    )
+      .trim()
+      .toLowerCase();
+    const activeGovDisasterGuide = activeGovDisasterType
+      ? SOS_GUIDE_BY_DISASTER[activeGovDisasterType] ||
+        SOS_GUIDE_BY_DISASTER.other
+      : null;
+    const activeGovDisasterLabel = activeGovDisasterAnnouncement?.disasterTypeLabel
+      ? activeGovDisasterAnnouncement.disasterTypeLabel
+      : activeGovDisasterType
+        ? getDisasterTypeLabel(activeGovDisasterType)
+        : '';
     const accessibilityContainer = getAccessibilityContainerProps(
       accessibilitySettings,
     );
@@ -2054,49 +2111,224 @@ class ResidentDashboard extends React.Component {
         style={accessibilityContainer.style}
         aria-live={accessibilityContainer.ariaLive}
       >
-        <ResidentDashboardHeader
-          userName={userName}
-          userPhotoUrl={userPhotoUrl}
-          showProfileMenu={showProfileMenu}
-          onProfileMenuClick={this.handleProfileMenuClick}
-          activeTab={activeTab}
-          onTabChange={this.handleTabChange}
-          menuContent={
-            <div className='absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-md shadow-xl py-1 z-2001 overflow-hidden'>
-              <button
-                onClick={() => {
-                  this.setState({ showProfileMenu: false });
-                  if (typeof this.props.onViewProfile === "function") {
-                    this.props.onViewProfile();
-                  }
-                }}
-                className='w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-gray-50 flex items-center gap-3 font-bold transition-colors'
+        <Header
+          sticky={true}
+          centerContent={
+            <>
+              {this.renderHeaderTabItem(
+                faHouse,
+                "Dashboard",
+                "dashboard",
+                activeTab === "dashboard",
+              )}
+              {this.renderHeaderTabItem(
+                faBell,
+                "Alerts",
+                "alerts",
+                activeTab === "alerts",
+              )}
+              {this.renderHeaderTabItem(
+                faMapLocationDot,
+                "Evac Plan",
+                "evac-plan",
+                activeTab === "evac-plan",
+              )}
+              {this.renderHeaderTabItem(
+                faBookOpen,
+                "Resources",
+                "resources",
+                activeTab === "resources",
+              )}
+              {this.renderHeaderTabItem(
+                faAddressBook,
+                "Contacts",
+                "contacts",
+                activeTab === "contacts",
+              )}
+              {this.renderHeaderTabItem(
+                faUsersViewfinder,
+                "Sectors",
+                "sectors",
+                activeTab === "sectors",
+              )}
+            </>
+          }
+          rightContent={
+            <div
+              className='relative shrink-0'
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div
+                className='flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-1 pr-3 rounded-full transition-colors'
+                onClick={this.handleProfileMenuClick}
               >
-                <FontAwesomeIcon icon={faUserCircle} /> View Profile
-              </button>
-              <button
-                onClick={() => {
-                  this.setState({ showProfileMenu: false });
-                  if (typeof this.props.onOpenSetup === "function") {
-                    this.props.onOpenSetup(this.state.accountType);
-                  }
-                }}
-                className='w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-gray-50 flex items-center gap-3 font-bold transition-colors'
-              >
-                <FontAwesomeIcon icon={faPenToSquare} /> Setup Profile
-              </button>
-              <button
-                onClick={this.props.onLogout}
-                className='w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 font-bold transition-colors'
-              >
-                <FontAwesomeIcon icon={faRightFromBracket} /> Sign Out
-              </button>
+                <div className='w-8 h-8 rounded-full flex items-center justify-center border border-blue-200 overflow-hidden'>
+                  {userPhotoUrl ? (
+                    <img
+                      src={userPhotoUrl}
+                      alt='Profile'
+                      className='w-full h-full object-cover'
+                    />
+                  ) : (
+                    <div className='bg-blue-100 w-full h-full flex items-center justify-center text-blue-700'>
+                      <FontAwesomeIcon icon={faUserCircle} size='lg' />
+                    </div>
+                  )}
+                </div>
+                <div className='text-left'>
+                  <p className='text-[9px] font-bold text-gray-400 uppercase leading-none mb-1'>
+                    Authenticated Resident
+                  </p>
+                  <p className='text-xs font-black text-[#3a4a5b] leading-none'>
+                    {userName}
+                  </p>
+                </div>
+                <FontAwesomeIcon
+                  icon={faChevronDown}
+                  className={`text-[10px] text-gray-400 transition-transform ${
+                    showProfileMenu ? "rotate-180" : ""
+                  }`}
+                />
+              </div>
+
+              {showProfileMenu && (
+                <>
+                  <div className='hidden lg:block absolute right-0 top-full mt-2 z-2000 profile-dropdown-expandable'>
+                    <div className='w-56 bg-white border border-gray-200 rounded-md shadow-xl py-1 overflow-hidden'>
+                      <button
+                        onClick={() => {
+                          this.setState({ showProfileMenu: false });
+                          if (typeof this.props.onViewProfile === "function") {
+                            this.props.onViewProfile();
+                          }
+                        }}
+                        className='w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-gray-50 flex items-center gap-3 font-bold transition-colors'
+                      >
+                        <FontAwesomeIcon icon={faUserCircle} /> View Profile
+                      </button>
+                      <button
+                        onClick={() => {
+                          this.setState({ showProfileMenu: false });
+                          if (typeof this.props.onOpenSetup === "function") {
+                            this.props.onOpenSetup(this.state.accountType);
+                          }
+                        }}
+                        className='w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-gray-50 flex items-center gap-3 font-bold transition-colors'
+                      >
+                        <FontAwesomeIcon icon={faPenToSquare} /> Setup Profile
+                      </button>
+                      <button
+                        onClick={this.props.onLogout}
+                        className='w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 font-bold transition-colors'
+                      >
+                        <FontAwesomeIcon icon={faRightFromBracket} /> Sign Out
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className='lg:hidden relative mt-2 w-full profile-dropdown-expandable'>
+                    <div className='w-full bg-white border border-gray-200 rounded-md shadow-sm py-1 overflow-hidden'>
+                      <button
+                        onClick={() => {
+                          this.setState({ showProfileMenu: false });
+                          if (typeof this.props.onViewProfile === "function") {
+                            this.props.onViewProfile();
+                          }
+                        }}
+                        className='w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-gray-50 flex items-center gap-3 font-bold transition-colors'
+                      >
+                        <FontAwesomeIcon icon={faUserCircle} /> View Profile
+                      </button>
+                      <button
+                        onClick={() => {
+                          this.setState({ showProfileMenu: false });
+                          if (typeof this.props.onOpenSetup === "function") {
+                            this.props.onOpenSetup(this.state.accountType);
+                          }
+                        }}
+                        className='w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-gray-50 flex items-center gap-3 font-bold transition-colors'
+                      >
+                        <FontAwesomeIcon icon={faPenToSquare} /> Setup Profile
+                      </button>
+                      <button
+                        onClick={this.props.onLogout}
+                        className='w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 font-bold transition-colors'
+                      >
+                        <FontAwesomeIcon icon={faRightFromBracket} /> Sign Out
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           }
         />
 
         <div className='px-3 py-4 lg:px-4 lg:py-5'>
           <div className='w-full space-y-6'>
+            {(() => {
+              const activeDisasterAnnouncements = emergencyEvents.filter(
+                (event) =>
+                  event.type === 'announcement' &&
+                  event.announcementType === 'disaster' &&
+                  event.status !== 'resolved',
+              );
+              if (activeDisasterAnnouncements.length === 0) return null;
+              const latest = activeDisasterAnnouncements[0];
+              if (disasterAlertDismissedId === latest.id) return null;
+              const disasterLabel =
+                latest.disasterTypeLabel ||
+                (latest.disasterType
+                  ? String(latest.disasterType).charAt(0).toUpperCase() + String(latest.disasterType).slice(1)
+                  : 'Disaster');
+              return (
+                <div
+                  className='fixed inset-0 z-[9999] flex items-center justify-center'
+                  style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+                >
+                  <div className='relative bg-white rounded-2xl shadow-2xl border-2 border-red-500 w-full max-w-md mx-4 px-7 py-7'>
+                    <button
+                      onClick={() => this.setState({ disasterAlertDismissedId: latest.id })}
+                      className='absolute top-3 right-4 text-gray-400 hover:text-gray-700 text-xl font-bold leading-none'
+                      aria-label='Dismiss'
+                    >
+                      &times;
+                    </button>
+                    <div className='flex items-center gap-3 mb-4'>
+                      <div className='w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0'>
+                        <FontAwesomeIcon
+                          icon={faTriangleExclamation}
+                          className='text-red-600 text-2xl animate-pulse'
+                        />
+                      </div>
+                      <div>
+                        <span className='bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide'>
+                          Disaster Alert
+                        </span>
+                        <p className='text-[11px] font-black text-red-700 uppercase mt-1'>
+                          {disasterLabel}
+                        </p>
+                      </div>
+                    </div>
+                    <p className='text-base font-black text-red-800 uppercase tracking-tight mb-2'>
+                      {latest.alertTitle || 'Official Disaster Announcement'}
+                    </p>
+                    <p className='text-sm font-medium text-slate-700 leading-relaxed'>
+                      {latest.message || 'An official disaster announcement has been issued by your LGU. Please follow evacuation instructions.'}
+                    </p>
+                    <p className='text-[11px] font-bold text-red-500 uppercase mt-3'>
+                      Issued by: {latest.userName || 'LGU'}
+                    </p>
+                    <button
+                      onClick={() => this.setState({ disasterAlertDismissedId: latest.id })}
+                      className='mt-5 w-full py-2.5 rounded-xl bg-red-600 text-white text-sm font-black uppercase hover:bg-red-700 transition-colors'
+                    >
+                      Acknowledge &amp; Close
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
             {activeTab !== "dashboard" ? (
               this.renderActiveTabPage()
             ) : (
@@ -2180,6 +2412,36 @@ class ResidentDashboard extends React.Component {
                             </div>
                           </div>
                         ) : null}
+                        {activeGovDisasterGuide ? (
+                          <div className='mt-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-4 shadow-sm'>
+                            <div className='flex items-center gap-2'>
+                              <div className='bg-orange-500 text-white text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-wide'>
+                                LGU Disaster Alert
+                              </div>
+                              <p className='text-[11px] font-black text-orange-700 uppercase'>
+                                {activeGovDisasterLabel}
+                              </p>
+                            </div>
+                            <h4 className='mt-3 text-sm font-black text-slate-800 uppercase tracking-wide'>
+                              {activeGovDisasterGuide.title}
+                            </h4>
+                            <div className='mt-2 space-y-2'>
+                              {activeGovDisasterGuide.steps.map((step, index) => (
+                                <div
+                                  key={`gov-${activeGovDisasterType}-guide-${index}`}
+                                  className='flex gap-2'
+                                >
+                                  <div className='mt-0.5 h-5 w-5 rounded-full bg-white border border-orange-200 text-orange-600 text-[10px] font-black flex items-center justify-center shrink-0'>
+                                    {index + 1}
+                                  </div>
+                                  <p className='text-xs font-medium text-slate-700 leading-relaxed'>
+                                    {step}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                         {evacuationArrival?.arrived ? (
                           <div className='mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 shadow-sm'>
                             <div className='flex items-center gap-2'>
@@ -2210,6 +2472,36 @@ class ResidentDashboard extends React.Component {
                         </p>
 
                         <div className='relative h-[34rem] sm:h-[38rem] lg:h-[44rem] w-full border border-slate-200 rounded-lg overflow-hidden z-0 mt-4'>
+                          {(() => {
+                            const activeDis = emergencyEvents.filter(
+                              (ev) =>
+                                ev.type === 'announcement' &&
+                                ev.announcementType === 'disaster' &&
+                                ev.status !== 'resolved',
+                            );
+                            if (activeDis.length === 0) return null;
+                            const latest = activeDis[0];
+                            if (disasterAlertDismissedId !== latest.id) return null;
+                            const disLabel =
+                              latest.disasterTypeLabel ||
+                              (latest.disasterType
+                                ? String(latest.disasterType).charAt(0).toUpperCase() + String(latest.disasterType).slice(1)
+                                : 'Disaster');
+                            return (
+                              <div
+                                className='absolute top-3 right-3 z-10 bg-white border-2 border-red-500 rounded-xl shadow-lg px-3 py-2.5 max-w-[220px] cursor-pointer hover:bg-red-50 transition-colors'
+                                onClick={() => this.setState({ disasterAlertDismissedId: null })}
+                                title='Click to view disaster alert'
+                              >
+                                <div className='flex items-center gap-2 mb-1'>
+                                  <FontAwesomeIcon icon={faTriangleExclamation} className='text-red-600 text-sm animate-pulse flex-shrink-0' />
+                                  <span className='text-[10px] font-black text-red-600 uppercase tracking-wide'>Disaster Alert</span>
+                                </div>
+                                <p className='text-[11px] font-black text-slate-800 uppercase leading-tight'>{latest.alertTitle || 'Official Announcement'}</p>
+                                <p className='text-[10px] font-semibold text-red-500 uppercase mt-0.5'>{disLabel}</p>
+                              </div>
+                            );
+                          })()}
                           <MapView
                             mapLib={maplibregl}
                             mapStyle={MAP_STYLE}
@@ -2567,56 +2859,73 @@ class ResidentDashboard extends React.Component {
 
                   {/* SIDEBAR SECTION */}
                   <section className='lg:col-span-4 space-y-4 scroll-mt-44'>
-                    <div className='bg-white border border-gray-200 rounded-lg p-4 shadow-sm'>
-                      <div className='flex items-center gap-2 mb-3'>
-                        <FontAwesomeIcon
-                          icon={faBell}
-                          className='text-blue-700'
-                        />
-                        <h3 className='text-xs font-black text-slate-700 uppercase tracking-tight'>
-                          Notifications Widget
-                        </h3>
+                    <div>
+                      <div className='bg-white border border-gray-200 rounded-lg p-2 shadow-sm mb-2 w-fit'>
+                        <button
+                          className='relative focus:outline-none'
+                          onClick={this.toggleNotificationWidgetCollapsed}
+                          title={notificationWidgetCollapsed ? 'Show notifications' : 'Hide notifications'}
+                        >
+                          <FontAwesomeIcon icon={faBell} className='text-blue-700' />
+                          {notificationItems.length > 0 && (
+                            <span className='absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5'>
+                              {notificationItems.length}
+                            </span>
+                          )}
+                        </button>
                       </div>
-                      <p className='text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-3'>
-                        Alerts & announcements
-                      </p>
-                      <div className='space-y-2'>
-                        {notificationItems.map((item) => (
-                          <div
-                            key={item.id}
-                            className='rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2'
-                          >
-                            <p className='text-[10px] font-black text-slate-800 uppercase flex items-center gap-1'>
-                              <FontAwesomeIcon
-                                icon={
-                                  item.type === "announcement"
-                                    ? faBullhorn
-                                    : faShieldHeart
-                                }
-                                className={
-                                  item.type === "sos"
-                                    ? "text-red-600"
-                                    : "text-blue-700"
-                                }
-                              />
-                              {item.title}
-                            </p>
-                            <p className='text-[10px] font-medium text-slate-600 mt-0.5'>
-                              {item.description}
-                            </p>
-                            {item.disasterTypeLabel && (
-                              <p className='text-[9px] font-black text-red-600 mt-1 uppercase'>
-                                Disaster type: {item.disasterTypeLabel}
-                              </p>
-                            )}
-                            {item.meta && (
-                              <p className='text-[9px] font-semibold text-slate-400 mt-1 uppercase'>
-                                {item.meta}
-                              </p>
-                            )}
+
+                      {!notificationWidgetCollapsed && (
+                      <div className='bg-white border border-gray-200 rounded-lg p-4 shadow-sm'>
+                      <h3 className='text-xs font-black text-slate-700 uppercase tracking-tight mb-3'>
+                        Notifications Widget
+                      </h3>
+                      {(
+                        <>
+                          <p className='text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-3'>
+                            Alerts & announcements
+                          </p>
+                          <div className='space-y-2'>
+                            {notificationItems.map((item) => (
+                              <div
+                                key={item.id}
+                                className='rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2'
+                              >
+                                <p className='text-[10px] font-black text-slate-800 uppercase flex items-center gap-1'>
+                                  <FontAwesomeIcon
+                                    icon={
+                                      item.type === "announcement"
+                                        ? faBullhorn
+                                        : faShieldHeart
+                                    }
+                                    className={
+                                      item.type === "sos"
+                                        ? "text-red-600"
+                                        : "text-blue-700"
+                                    }
+                                  />
+                                  {item.title}
+                                </p>
+                                <p className='text-[10px] font-medium text-slate-600 mt-0.5'>
+                                  {item.description}
+                                </p>
+                                {item.disasterTypeLabel && (
+                                  <p className='text-[9px] font-black text-red-600 mt-1 uppercase'>
+                                    Disaster type: {item.disasterTypeLabel}
+                                  </p>
+                                )}
+                                {item.meta && (
+                                  <p className='text-[9px] font-semibold text-slate-400 mt-1 uppercase'>
+                                    {item.meta}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        </>
+                      )}
                       </div>
+                      )}
                     </div>
 
                     <h3 className='text-xs font-black text-slate-500 uppercase tracking-[0.18em]'>

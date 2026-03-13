@@ -10,6 +10,7 @@ import {
   faChartBar,
   faUserShield,
   faSpinner,
+  faBell,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   Map as MapView,
@@ -25,6 +26,7 @@ import {
   getDocsFromServer,
   onSnapshot,
   query,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -193,9 +195,13 @@ class GovernmentDashboard extends React.Component {
       announcementTitle: "",
       announcementText: "",
       announcementTargetGroup: "all",
+      announcementType: "normal",
+      announcementDisasterType: "",
       postingAnnouncement: false,
+      resolvingDisaster: false,
       resolvingSosEventId: null,
       selectedSosEventId: null,
+      sosPanelCollapsed: true,
       qrScanValue: "",
       qrScanResult: null,
       qrScanError: "",
@@ -234,7 +240,12 @@ class GovernmentDashboard extends React.Component {
     this.handleAnnouncementInput = this.handleAnnouncementInput.bind(this);
     this.handleAnnouncementTargetChange =
       this.handleAnnouncementTargetChange.bind(this);
+    this.handleAnnouncementTypeChange =
+      this.handleAnnouncementTypeChange.bind(this);
+    this.handleAnnouncementDisasterTypeChange =
+      this.handleAnnouncementDisasterTypeChange.bind(this);
     this.handlePostAnnouncement = this.handlePostAnnouncement.bind(this);
+    this.handleResolveDisaster = this.handleResolveDisaster.bind(this);
     this.handleMapModeChange = this.handleMapModeChange.bind(this);
     this.handleLocateUser = this.handleLocateUser.bind(this);
     this.handleMapLocationFound = this.handleMapLocationFound.bind(this);
@@ -250,6 +261,7 @@ class GovernmentDashboard extends React.Component {
     this.handleGovProfileMenuClose = this.handleGovProfileMenuClose.bind(this);
     this.handleGovDropdownLogout = this.handleGovDropdownLogout.bind(this);
     this.handleResolveSosAlert = this.handleResolveSosAlert.bind(this);
+    this.toggleSosPanelCollapsed = this.toggleSosPanelCollapsed.bind(this);
   }
 
   /**
@@ -613,6 +625,30 @@ class GovernmentDashboard extends React.Component {
     this.setState({ announcementTargetGroup: event.target.value });
   }
 
+  handleAnnouncementTypeChange(event) {
+    this.setState({ announcementType: event.target.value });
+  }
+
+  handleAnnouncementDisasterTypeChange(event) {
+    this.setState({ announcementDisasterType: event.target.value });
+  }
+
+  async handleResolveDisaster(disasterEventId) {
+    if (!disasterEventId || this.state.resolvingDisaster) return;
+    const confirmed = window.confirm('Mark this disaster announcement as resolved and deactivate Disaster Mode?');
+    if (!confirmed) return;
+    this.setState({ resolvingDisaster: true });
+    try {
+      const eventRef = doc(db, 'emergencyEvents', disasterEventId);
+      await updateDoc(eventRef, { status: 'resolved' });
+    } catch (error) {
+      console.error('Failed to resolve disaster announcement:', error);
+      alert('Failed to resolve disaster. Please try again.');
+    } finally {
+      this.setState({ resolvingDisaster: false });
+    }
+  }
+
   handleMapModeChange(mode) {
     this.setState({ mapDisplayMode: mode });
   }
@@ -841,6 +877,10 @@ class GovernmentDashboard extends React.Component {
     });
   }
 
+  toggleSosPanelCollapsed() {
+    this.setState((prev) => ({ sosPanelCollapsed: !prev.sosPanelCollapsed }));
+  }
+
   async handleResolveSosAlert(event) {
     const { resolvingSosEventId, userId, agencyName } = this.state;
 
@@ -872,6 +912,8 @@ class GovernmentDashboard extends React.Component {
       announcementTitle,
       announcementText,
       announcementTargetGroup,
+      announcementType,
+      announcementDisasterType,
       userId,
       agencyName,
       postingAnnouncement,
@@ -892,12 +934,16 @@ class GovernmentDashboard extends React.Component {
         alertTitle: title,
         targetGroup: announcementTargetGroup,
         category: announcementTargetGroup === "all" ? "general" : "sector",
+        announcementType,
+        disasterType: announcementType === "disaster" ? announcementDisasterType : "",
         message,
       });
       this.setState({
         announcementTitle: "",
         announcementText: "",
         announcementTargetGroup: "all",
+        announcementType: "normal",
+        announcementDisasterType: "",
         postingAnnouncement: false,
       });
     } catch (error) {
@@ -1093,7 +1139,10 @@ class GovernmentDashboard extends React.Component {
       announcementTitle,
       announcementText,
       announcementTargetGroup,
+      announcementType,
+      announcementDisasterType,
       postingAnnouncement,
+      resolvingDisaster,
       mapDisplayMode,
       mapCenter,
       mapZoom,
@@ -1106,6 +1155,7 @@ class GovernmentDashboard extends React.Component {
       selectedSosEventId,
       evacuationCenterSummaryRows,
       evacuationCapacityError,
+      sosPanelCollapsed,
     } = this.state;
     const recentFeedEvents = emergencyEvents.slice(0, 8);
     const evacuationCenterLogs = emergencyEvents
@@ -1123,6 +1173,15 @@ class GovernmentDashboard extends React.Component {
         (event) =>
           event.status !== "resolved" && !resolvedSourceEventIds.has(event.id),
       );
+
+    const activeDisasterAnnouncements = emergencyEvents.filter(
+      (event) =>
+        event.type === 'announcement' &&
+        event.announcementType === 'disaster' &&
+        event.status !== 'resolved' &&
+        !resolvedSourceEventIds.has(event.id),
+    );
+    const activeDisasterAnnouncement = activeDisasterAnnouncements[0] || null;
 
     const getUserByEvent = (event) =>
       filteredUsers.find(
@@ -1159,7 +1218,9 @@ class GovernmentDashboard extends React.Component {
     };
 
     const disasterModeStatus =
-      activeSosEvents.length > 0 ? "Activated" : "Standby";
+      activeSosEvents.length > 0 || activeDisasterAnnouncement
+        ? "Activated"
+        : "Standby";
 
     const getSectorLabel = (location) => {
       if (!location || typeof location !== "string") return "Unknown Location";
@@ -1492,94 +1553,113 @@ class GovernmentDashboard extends React.Component {
           </div>
 
           <div className='xl:col-span-4 space-y-6'>
-            <div className='bg-white rounded-lg shadow-sm p-4 border border-gray-200'>
+            <div>
+              <div className='bg-white rounded-lg shadow-sm p-2 border border-gray-200 mb-2 w-fit'>
+                <button
+                  className='relative focus:outline-none'
+                  onClick={this.toggleSosPanelCollapsed}
+                  title={sosPanelCollapsed ? 'Show SOS Panel' : 'Hide SOS Panel'}
+                >
+                  <FontAwesomeIcon icon={faBell} className='text-red-600' size='sm' />
+                  {activeSosEvents && activeSosEvents.length > 0 && (
+                    <span className='absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5'>
+                      {activeSosEvents.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {!sosPanelCollapsed && (
+              <div className='bg-white rounded-lg shadow-sm p-4 border border-gray-200'>
               <h3 className='text-sm font-black text-[#3a4a5b] uppercase mb-3'>
                 SOS Panel
               </h3>
 
-              {emergencyFeedLoading ? (
-                <div className='text-center py-5'>
-                  <FontAwesomeIcon
-                    icon={faSpinner}
-                    spin
-                    className='text-gray-400 text-lg'
-                  />
-                </div>
-              ) : activeSosEvents.length === 0 ? (
-                <p className='text-sm text-gray-500'>No active SOS alerts.</p>
-              ) : (
-                <div className='space-y-2 max-h-80 overflow-y-auto pr-1'>
-                  {activeSosEvents.slice(0, 8).map((event) => {
-                    const user = getUserByEvent(event);
-                    const coordinates = this.getEventCoordinates(event);
-                    const isSelected =
-                      event.id && event.id === selectedSosEventId;
+              {(emergencyFeedLoading ? (
+                  <div className='text-center py-5'>
+                    <FontAwesomeIcon
+                      icon={faSpinner}
+                      spin
+                      className='text-gray-400 text-lg'
+                    />
+                  </div>
+                ) : activeSosEvents.length === 0 ? (
+                  <p className='text-sm text-gray-500'>No active SOS alerts.</p>
+                ) : (
+                  <div className='space-y-2 max-h-80 overflow-y-auto pr-1'>
+                    {activeSosEvents.slice(0, 8).map((event) => {
+                      const user = getUserByEvent(event);
+                      const coordinates = this.getEventCoordinates(event);
+                      const isSelected =
+                        event.id && event.id === selectedSosEventId;
 
-                    return (
-                      <div
-                        key={event.id}
-                        className={`rounded-lg border px-3 py-2 transition-colors ${
-                          isSelected
-                            ? "border-red-500 bg-red-100 ring-2 ring-red-400"
-                            : "border-red-100 bg-red-50"
-                        }`}
-                      >
-                        <p className='text-xs font-black text-red-700 uppercase'>
-                          {event.userName || user?.fullName || "Resident"}
-                        </p>
-                        {event.disasterTypeLabel || event.disasterType ? (
-                          <p className='text-[11px] mt-1'>
-                            <span
-                              className='inline-block px-2 py-0.5 rounded-full text-white font-bold uppercase tracking-wide'
-                              style={{
-                                backgroundColor: "#dc2626",
-                                fontSize: "0.65rem",
-                              }}
-                            >
-                              {event.disasterTypeLabel || event.disasterType}
-                            </span>
-                          </p>
-                        ) : null}
-                        <p className='text-[11px] text-gray-700 mt-1'>
-                          <span className='font-bold'>Location:</span>{" "}
-                          {this.getEventLocationLabel(event)}
-                        </p>
-                        <p className='text-[11px] text-gray-700'>
-                          <span className='font-bold'>Disability Type:</span>{" "}
-                          {getDisabilityLabel(user, event)}
-                        </p>
-                        <p className='text-[11px] text-gray-700'>
-                          <span className='font-bold'>Medical Needs:</span>{" "}
-                          {getMedicalNeeds(user, event)}
-                        </p>
-                        <button
-                          type='button'
-                          onClick={() => this.handleResolveSosAlert(event)}
-                          disabled={resolvingSosEventId === event.id}
-                          className='mt-2 px-3 py-1.5 bg-red-600 text-white rounded text-[11px] font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
-                        >
-                          {resolvingSosEventId === event.id
-                            ? "Resolving..."
-                            : "Resolve SOS"}
-                        </button>
-                        <button
-                          type='button'
-                          onClick={() =>
-                            this.handleShowResidentPin(coordinates, event.id)
-                          }
-                          disabled={!coordinates}
-                          className={`mt-2 ml-2 inline-block px-3 py-1.5 rounded text-[11px] font-bold disabled:opacity-50 disabled:cursor-not-allowed ${
+                      return (
+                        <div
+                          key={event.id}
+                          className={`rounded-lg border px-3 py-2 transition-colors ${
                             isSelected
-                              ? "bg-red-600 text-white hover:bg-red-700"
-                              : "bg-blue-600 text-white hover:bg-blue-700"
+                              ? "border-red-500 bg-red-100 ring-2 ring-red-400"
+                              : "border-red-100 bg-red-50"
                           }`}
                         >
-                          {isSelected ? "Pinned ✓" : "Show Pin"}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                          <p className='text-xs font-black text-red-700 uppercase'>
+                            {event.userName || user?.fullName || "Resident"}
+                          </p>
+                          {event.disasterTypeLabel || event.disasterType ? (
+                            <p className='text-[11px] mt-1'>
+                              <span
+                                className='inline-block px-2 py-0.5 rounded-full text-white font-bold uppercase tracking-wide'
+                                style={{
+                                  backgroundColor: "#dc2626",
+                                  fontSize: "0.65rem",
+                                }}
+                              >
+                                {event.disasterTypeLabel || event.disasterType}
+                              </span>
+                            </p>
+                          ) : null}
+                          <p className='text-[11px] text-gray-700 mt-1'>
+                            <span className='font-bold'>Location:</span>{" "}
+                            {this.getEventLocationLabel(event)}
+                          </p>
+                          <p className='text-[11px] text-gray-700'>
+                            <span className='font-bold'>Disability Type:</span>{" "}
+                            {getDisabilityLabel(user, event)}
+                          </p>
+                          <p className='text-[11px] text-gray-700'>
+                            <span className='font-bold'>Medical Needs:</span>{" "}
+                            {getMedicalNeeds(user, event)}
+                          </p>
+                          <button
+                            type='button'
+                            onClick={() => this.handleResolveSosAlert(event)}
+                            disabled={resolvingSosEventId === event.id}
+                            className='mt-2 px-3 py-1.5 bg-red-600 text-white rounded text-[11px] font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                          >
+                            {resolvingSosEventId === event.id
+                              ? "Resolving..."
+                              : "Resolve SOS"}
+                          </button>
+                          <button
+                            type='button'
+                            onClick={() =>
+                              this.handleShowResidentPin(coordinates, event.id)
+                            }
+                            disabled={!coordinates}
+                            className={`mt-2 ml-2 inline-block px-3 py-1.5 rounded text-[11px] font-bold disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isSelected
+                                ? "bg-red-600 text-white hover:bg-red-700"
+                                : "bg-blue-600 text-white hover:bg-blue-700"
+                            }`}
+                          >
+                            {isSelected ? "Pinned ✓" : "Show Pin"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
               )}
             </div>
 
@@ -1647,10 +1727,62 @@ class GovernmentDashboard extends React.Component {
         </div>
 
         <div className='bg-white rounded-lg shadow-sm p-4 mb-6 border border-gray-200'>
+          {activeDisasterAnnouncement && (
+            <div className='flex items-center justify-between gap-3 rounded-lg bg-red-50 border border-red-300 px-4 py-3 mb-4'>
+              <div className='flex items-center gap-3 min-w-0'>
+                <span className='flex-shrink-0 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse' />
+                <div className='min-w-0'>
+                  <p className='text-xs font-black text-red-700 uppercase tracking-wide'>Disaster Mode Active</p>
+                  <p className='text-sm font-semibold text-red-900 truncate'>
+                    {activeDisasterAnnouncement.alertTitle || 'Disaster Announcement'}
+                    {activeDisasterAnnouncement.disasterType ? (
+                      <span className='ml-2 text-[11px] font-black text-red-600 uppercase'>
+                        — {String(activeDisasterAnnouncement.disasterType).charAt(0).toUpperCase() + String(activeDisasterAnnouncement.disasterType).slice(1)}
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
+              <button
+                type='button'
+                onClick={() => this.handleResolveDisaster(activeDisasterAnnouncement.id)}
+                disabled={resolvingDisaster}
+                className='flex-shrink-0 px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-black uppercase hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap'
+              >
+                {resolvingDisaster ? 'Resolving...' : 'End Disaster'}
+              </button>
+            </div>
+          )}
           <div className='border border-gray-200 rounded-lg p-3 bg-gray-50 mb-4'>
             <p className='text-xs font-black text-[#3a4a5b] uppercase mb-2'>
               Post LGU Announcement
             </p>
+            <div className='flex flex-wrap gap-2 mb-2'>
+              <select
+                value={announcementType}
+                onChange={this.handleAnnouncementTypeChange}
+                className='px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+              >
+                <option value='normal'>Normal</option>
+                <option value='disaster'>Disaster</option>
+              </select>
+              {announcementType === 'disaster' && (
+                <select
+                  value={announcementDisasterType}
+                  onChange={this.handleAnnouncementDisasterTypeChange}
+                  className='px-3 py-2 border border-red-300 rounded-lg bg-red-50 text-sm font-semibold text-red-900 focus:ring-2 focus:ring-red-400 focus:border-transparent'
+                >
+                  <option value=''>Disaster type...</option>
+                  <option value='flood'>Flood</option>
+                  <option value='earthquake'>Earthquake</option>
+                  <option value='fire'>Fire</option>
+                  <option value='landslide'>Landslide</option>
+                  <option value='typhoon'>Typhoon</option>
+                  <option value='medical'>Medical Emergency</option>
+                  <option value='other'>Other</option>
+                </select>
+              )}
+            </div>
             <div className='grid grid-cols-1 md:grid-cols-12 gap-2'>
               <input
                 type='text'
@@ -1683,7 +1815,8 @@ class GovernmentDashboard extends React.Component {
                 disabled={
                   postingAnnouncement ||
                   !announcementTitle.trim() ||
-                  !announcementText.trim()
+                  !announcementText.trim() ||
+                  (announcementType === 'disaster' && !announcementDisasterType)
                 }
                 className='md:col-span-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >

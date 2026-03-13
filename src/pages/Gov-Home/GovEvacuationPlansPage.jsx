@@ -46,11 +46,8 @@ function getFamilyMemberRows(user) {
 
 function GovEvacuationPlansPage({ evacuationCenters = [] }) {
   const [uploadedPlans, setUploadedPlans] = React.useState([]);
-  const [planDraft, setPlanDraft] = React.useState({
-    fileName: "",
-    version: "",
-    uploadDate: new Date().toISOString().slice(0, 10),
-  });
+  const [planFile, setPlanFile] = React.useState(null);
+  const planFileInputRef = React.useRef(null);
 
   const [centers, setCenters] = React.useState([]);
   const [centerDraft, setCenterDraft] = React.useState({
@@ -271,30 +268,21 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
   }, [centerRosterEntries, selectedRosterCenterId]);
 
   const handlePlanUpload = () => {
-    if (
-      !planDraft.fileName.trim() ||
-      !planDraft.version.trim() ||
-      !planDraft.uploadDate
-    ) {
-      return;
-    }
+    if (!planFile) return;
 
     setUploadedPlans((prev) => [
       {
         id: `plan-${Date.now()}`,
-        fileName: planDraft.fileName.trim(),
-        version: planDraft.version.trim(),
-        uploadDate: planDraft.uploadDate,
+        fileName: planFile.name,
+        fileType: planFile.type,
+        uploadDate: new Date().toISOString().slice(0, 10),
+        fileUrl: URL.createObjectURL(planFile),
       },
       ...prev,
     ]);
 
-    setPlanDraft((prev) => ({
-      ...prev,
-      fileName: "",
-      version: "",
-      uploadDate: new Date().toISOString().slice(0, 10),
-    }));
+    setPlanFile(null);
+    if (planFileInputRef.current) planFileInputRef.current.value = "";
   };
 
   const handleCenterSave = () => {
@@ -365,6 +353,20 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
           ? Math.max(0, Math.min(parsedValue, center.capacity))
           : 0;
         return { ...center, headcount: bounded };
+      }),
+    );
+  };
+
+  const updateAvailableSlots = (centerId, value) => {
+    const parsedValue = Number(value);
+
+    setCenters((prev) =>
+      prev.map((center) => {
+        if (center.id !== centerId) return center;
+        const boundedSlots = Number.isFinite(parsedValue)
+          ? Math.max(0, Math.min(parsedValue, center.capacity))
+          : 0;
+        return { ...center, headcount: center.capacity - boundedSlots };
       }),
     );
   };
@@ -492,71 +494,82 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
           <h4 className='text-sm font-black text-[#3a4a5b] uppercase mb-4'>
             Upload Plans
           </h4>
-          <p className='text-xs text-gray-500 mb-3'>
+          <p className='text-xs text-gray-500 mb-4'>
             Upload official evacuation maps
           </p>
 
-          <div className='grid grid-cols-1 md:grid-cols-12 gap-2 mb-4'>
-            <input
-              type='text'
-              value={planDraft.fileName}
-              onChange={(event) =>
-                setPlanDraft((prev) => ({
-                  ...prev,
-                  fileName: event.target.value,
-                }))
-              }
-              placeholder='File Name'
-              className='md:col-span-5 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-900 placeholder:text-slate-500'
-            />
-            <input
-              type='text'
-              value={planDraft.version}
-              onChange={(event) =>
-                setPlanDraft((prev) => ({
-                  ...prev,
-                  version: event.target.value,
-                }))
-              }
-              placeholder='Version'
-              className='md:col-span-3 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-900 placeholder:text-slate-500'
-            />
-            <input
-              type='date'
-              value={planDraft.uploadDate}
-              onChange={(event) =>
-                setPlanDraft((prev) => ({
-                  ...prev,
-                  uploadDate: event.target.value,
-                }))
-              }
-              className='md:col-span-3 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-900'
-            />
-            <button
-              type='button'
-              onClick={handlePlanUpload}
-              className='md:col-span-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700'
-            >
-              Add
-            </button>
+          <input
+            ref={planFileInputRef}
+            type='file'
+            accept='.pdf,.png,.jpg,.jpeg,.doc,.docx'
+            onChange={(event) => {
+              const file = event.target.files[0];
+              if (!file) return;
+              setPlanFile(file);
+            }}
+            className='hidden'
+          />
+
+          <div
+            onClick={() => planFileInputRef.current?.click()}
+            className='cursor-pointer border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-xl p-6 flex flex-col items-center justify-center gap-2 transition-colors bg-gray-50 hover:bg-blue-50 mb-3'
+          >
+            <svg xmlns='http://www.w3.org/2000/svg' className='w-8 h-8 text-gray-400' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={1.5}>
+              <path strokeLinecap='round' strokeLinejoin='round' d='M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5' />
+            </svg>
+            <p className='text-sm font-semibold text-gray-600'>Click to select a file</p>
+            <p className='text-xs text-gray-400'>PDF, PNG, JPG, DOC, DOCX</p>
           </div>
+
+          {planFile && (
+            <div className='flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg mb-3'>
+              <svg xmlns='http://www.w3.org/2000/svg' className='w-4 h-4 text-blue-500 flex-shrink-0' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
+                <path strokeLinecap='round' strokeLinejoin='round' d='M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13' />
+              </svg>
+              <span className='text-xs text-blue-700 font-medium truncate flex-1'>{planFile.name}</span>
+              <button
+                type='button'
+                onClick={() => { setPlanFile(null); if (planFileInputRef.current) planFileInputRef.current.value = ''; }}
+                className='text-gray-400 hover:text-red-500 text-base leading-none font-bold flex-shrink-0'
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          <button
+            type='button'
+            onClick={handlePlanUpload}
+            disabled={!planFile}
+            className='w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed mb-4'
+          >
+            Upload Plan
+          </button>
 
           <div className='space-y-2'>
             {uploadedPlans.length === 0 ? (
-              <p className='text-xs text-gray-500'>
-                No uploaded plans yet.
-              </p>
+              <p className='text-xs text-gray-500'>No uploaded plans yet.</p>
             ) : (
               uploadedPlans.map((plan) => (
                 <div
                   key={plan.id}
-                  className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm'
+                  className='flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5'
                 >
-                  <p className='font-bold text-[#3a4a5b]'>{plan.fileName}</p>
-                  <p className='text-xs text-gray-600'>Version: {plan.version}</p>
-                  <p className='text-xs text-gray-500'>
-                    Upload Date: {plan.uploadDate}
-                  </p>
+                  <div className='flex-1 min-w-0'>
+                    <p className='text-sm font-semibold text-[#3a4a5b] truncate'>{plan.fileName}</p>
+                    <p className='text-xs text-gray-500 mt-0.5'>{plan.uploadDate}</p>
+                  </div>
+                  {plan.fileUrl && (
+                    <a
+                      href={plan.fileUrl}
+                      download={plan.fileName}
+                      target='_blank'
+                      rel='noreferrer'
+                      className='flex-shrink-0 px-3 py-1.5 text-xs font-semibold text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 whitespace-nowrap'
+                    >
+                      Download
+                    </a>
+                  )}
                 </div>
               ))
             )}
@@ -684,6 +697,17 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
                         }
                         className='w-20 px-2 py-1 border border-gray-300 rounded text-xs bg-white text-slate-900'
                       />
+                      <label className='text-xs text-gray-500'>Capacity</label>
+                      <input
+                        type='number'
+                        min='0'
+                        max={center.capacity}
+                        value={availableSlots}
+                        onChange={(event) =>
+                          updateAvailableSlots(center.id, event.target.value)
+                        }
+                        className='w-20 px-2 py-1 border border-gray-300 rounded text-xs bg-white text-slate-900'
+                      />
                       <button
                         type='button'
                         onClick={() => handleSaveCapacityUpdate(center)}
@@ -694,9 +718,9 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
                       </button>
                     </div>
                   </div>
-                  <p className='text-xs text-gray-600 mt-1'>
-                    Available Slots:{" "}
-                    <span className='font-bold'>{availableSlots}</span>
+                  <p className='text-xs text-gray-400 mt-1'>
+                    Capacity:{" "}
+                    <span className='font-semibold'>{center.capacity}</span>
                   </p>
                   {saveStatus && (
                     <p
@@ -762,7 +786,9 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
 
           <div className='space-y-2'>
             {familyAssignments.length === 0 ? (
-              <p className='text-xs text-gray-500'>No family assignments yet.</p>
+              <p className='text-xs text-gray-500'>
+                No family assignments yet.
+              </p>
             ) : (
               familyAssignments.map((assignment) => (
                 <div

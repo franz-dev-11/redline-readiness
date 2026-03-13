@@ -129,7 +129,9 @@ class GovernmentLogin extends React.Component {
         normalizedStatus !== "approved"
       ) {
         await AuthService.logout();
-        throw new Error("Your account is not authorized for government access.");
+        throw new Error(
+          "Your account is not authorized for government access.",
+        );
       }
 
       // Active government account
@@ -216,9 +218,15 @@ class GovernmentLogin extends React.Component {
               <button
                 type='submit'
                 disabled={isLoading}
-                className='w-full bg-black text-white font-bold py-3 rounded shadow-lg transition-all active:scale-95 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed mt-2'
+                className={`w-full bg-black text-white font-bold py-3 rounded shadow-lg transition-all active:scale-95 hover:bg-gray-800 disabled:cursor-not-allowed mt-2 ${isLoading ? 'opacity-100' : 'disabled:opacity-50'}`}
               >
-                {isLoading ? "Logging in..." : "Sign in with email"}
+                {isLoading ? (
+                  <span className='flex items-center justify-center'>
+                    <svg className='windows-loading-spinner' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>
+                      <circle cx='8' cy='8' r='7' />
+                    </svg>
+                  </span>
+                ) : "Sign in with email"}
               </button>
             </form>
 

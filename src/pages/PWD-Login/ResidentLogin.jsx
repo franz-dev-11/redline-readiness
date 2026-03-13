@@ -81,6 +81,14 @@ class ResidentLogin extends React.Component {
         await AuthService.logout();
         throw new Error("This account is not an individual resident account.");
       }
+
+      if (String(userData?.status || "").toLowerCase() === "inactive") {
+        await AuthService.logout();
+        throw new Error(
+          "Your resident account is inactive. Please contact an administrator.",
+        );
+      }
+
       this.setState({ loading: false });
       if (this.props.onLoginSuccess) {
         this.props.onLoginSuccess();

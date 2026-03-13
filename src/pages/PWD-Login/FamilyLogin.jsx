@@ -86,6 +86,13 @@ class FamilyLogin extends React.Component {
         throw new Error("This account is not a family account.");
       }
 
+      if (String(userData?.status || "").toLowerCase() === "inactive") {
+        await AuthService.logout();
+        throw new Error(
+          "Your family account is inactive. Please contact an administrator.",
+        );
+      }
+
       this.setState({ loading: false });
 
       if (this.props.onLoginSuccess) {

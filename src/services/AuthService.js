@@ -237,19 +237,18 @@ class AuthService {
 
   /**
    * Get active government accounts count
-   * @returns {Promise<number>} Number of approved government accounts
+   * @returns {Promise<number>} Number of active government accounts
    */
   async getActiveGovernmentCount() {
     try {
       const { collection, query, where, getDocs } = await import("firebase/firestore");
       const usersRef = collection(this.db, "users");
-      const q = query(
-        usersRef,
-        where("role", "==", "government"),
-        where("status", "==", "approved")
-      );
+      const q = query(usersRef, where("role", "==", "government"));
       const querySnapshot = await getDocs(q);
-      return querySnapshot.size;
+      return querySnapshot.docs.filter((snapshotDoc) => {
+        const status = String(snapshotDoc.data()?.status || "").toLowerCase();
+        return status === "active" || status === "approved";
+      }).length;
     } catch (error) {
       throw new Error(`Failed to fetch active government count: ${error.message}`);
     }
@@ -266,9 +265,11 @@ class AuthService {
       await setDoc(
         doc(this.db, "users", userId),
         {
-          status: "approved",
+          status: "active",
           approvedAt: new Date(),
           approvedBy: adminId,
+          activatedAt: new Date(),
+          activatedBy: adminId,
         },
         { merge: true }
       );
@@ -296,6 +297,78 @@ class AuthService {
       );
     } catch (error) {
       throw new Error(`Failed to reject account: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update a government account status
+   * @param {string} userId - ID of the user to update
+   * @param {string} nextStatus - active or inactive
+   * @param {string} adminId - ID of the admin updating the record
+   * @returns {Promise<void>}
+   */
+  async updateGovernmentAccountStatus(userId, nextStatus, adminId) {
+    if (!["active", "inactive"].includes(nextStatus)) {
+      throw new Error("Unsupported government account status.");
+    }
+
+    try {
+      await setDoc(
+        doc(this.db, "users", userId),
+        {
+          status: nextStatus,
+          updatedAt: new Date(),
+          updatedBy: adminId,
+          ...(nextStatus === "active"
+            ? {
+                activatedAt: new Date(),
+                activatedBy: adminId,
+              }
+            : {
+                deactivatedAt: new Date(),
+                deactivatedBy: adminId,
+              }),
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      throw new Error(`Failed to update government account status: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update any user account status
+   * @param {string} userId - User ID
+   * @param {string} nextStatus - active or inactive
+   * @param {string} adminId - Admin user ID
+   * @returns {Promise<void>}
+   */
+  async updateUserAccountStatus(userId, nextStatus, adminId) {
+    if (!["active", "inactive"].includes(nextStatus)) {
+      throw new Error("Unsupported account status.");
+    }
+
+    try {
+      await setDoc(
+        doc(this.db, "users", userId),
+        {
+          status: nextStatus,
+          updatedAt: new Date(),
+          updatedBy: adminId,
+          ...(nextStatus === "active"
+            ? {
+                activatedAt: new Date(),
+                activatedBy: adminId,
+              }
+            : {
+                deactivatedAt: new Date(),
+                deactivatedBy: adminId,
+              }),
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      throw new Error(`Failed to update user account status: ${error.message}`);
     }
   }
 }

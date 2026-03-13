@@ -115,7 +115,24 @@ class GovernmentLogin extends React.Component {
         );
       }
 
-      // Approved government account
+      if (userData.status === "inactive") {
+        await AuthService.logout();
+        throw new Error(
+          "Your government account is inactive. Please contact an administrator.",
+        );
+      }
+
+      const normalizedStatus = String(userData.status || "").toLowerCase();
+      if (
+        normalizedStatus &&
+        normalizedStatus !== "active" &&
+        normalizedStatus !== "approved"
+      ) {
+        await AuthService.logout();
+        throw new Error("Your account is not authorized for government access.");
+      }
+
+      // Active government account
       if (this.props.onGovLogin) {
         this.props.onGovLogin();
       }

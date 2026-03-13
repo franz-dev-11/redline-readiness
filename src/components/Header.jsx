@@ -124,7 +124,7 @@ class Header extends React.Component {
             )}
 
             {profileContent && (
-              <div className='relative shrink-0 hidden lg:block'>
+              <div className={`relative shrink-0${centerContent ? ' hidden lg:block' : ''}`}>
                 {profileContent}
               </div>
             )}

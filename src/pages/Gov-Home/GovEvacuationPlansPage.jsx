@@ -3,10 +3,46 @@ import {
   collection,
   doc,
   onSnapshot,
+  query,
   serverTimestamp,
   setDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+
+function normalizeCenterKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function getFamilyMemberRows(user) {
+  const familyProfile = user?.familyProfile || {};
+  const headName = String(
+    familyProfile.householdHead || user?.fullName || "Family Head",
+  ).trim();
+  const members = Array.isArray(familyProfile.householdMembers)
+    ? familyProfile.householdMembers
+    : [];
+
+  const rows = [{ id: "head", name: headName, relationship: "Head" }];
+
+  members.forEach((member, index) => {
+    const memberName = String(member?.name || "").trim();
+    const relationship = String(member?.relationship || "Member").trim();
+    if (!memberName) {
+      return;
+    }
+    rows.push({
+      id: `member-${index}`,
+      name: memberName,
+      relationship: relationship || "Member",
+    });
+  });
+
+  return rows;
+}
 
 function GovEvacuationPlansPage({ evacuationCenters = [] }) {
   const [uploadedPlans, setUploadedPlans] = React.useState([
@@ -57,6 +93,11 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
   const [capacitySaving, setCapacitySaving] = React.useState({});
   const [capacitySaveStatus, setCapacitySaveStatus] = React.useState({});
   const [capacityLoadError, setCapacityLoadError] = React.useState("");
+  const [centerRosterEntries, setCenterRosterEntries] = React.useState([]);
+  const [selectedRosterCenterId, setSelectedRosterCenterId] =
+    React.useState("");
+  const [rosterLoading, setRosterLoading] = React.useState(true);
+  const [rosterError, setRosterError] = React.useState("");
 
   React.useEffect(() => {
     const normalizedCenters = evacuationCenters.map((center) => ({
@@ -68,6 +109,16 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
     }));
     setCenters(normalizedCenters);
   }, [evacuationCenters]);
+
+  React.useEffect(() => {
+    if (selectedRosterCenterId) {
+      return;
+    }
+    const firstCenter = centers[0];
+    if (firstCenter) {
+      setSelectedRosterCenterId(String(firstCenter.id));
+    }
+  }, [centers, selectedRosterCenterId]);
 
   React.useEffect(() => {
     const capacityRef = collection(db, "evacuationCenterCapacity");
@@ -145,6 +196,98 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
 
     return () => unsubscribe();
   }, []);
+
+  React.useEffect(() => {
+    const residentsRef = collection(db, "users");
+    const residentsQuery = query(residentsRef, where("role", "==", "resident"));
+
+    const unsubscribe = onSnapshot(
+      residentsQuery,
+      (snapshot) => {
+        setRosterLoading(false);
+        setRosterError("");
+
+        const entries = [];
+        const centerById = new Map(
+          centers.map((center) => [String(center.id), center]),
+        );
+        const centerByName = new Map(
+          centers.map((center) => [normalizeCenterKey(center.name), center]),
+        );
+
+        snapshot.forEach((userDoc) => {
+          const userData = userDoc.data() || {};
+          const arrival = userData?.evacuationArrival || null;
+          if (!arrival?.arrived) {
+            return;
+          }
+
+          const accountType = String(
+            userData?.accountType || userData?.userType || "",
+          ).toLowerCase();
+          const isFamily =
+            accountType.includes("family") || Boolean(userData?.familyProfile);
+
+          const arrivalCenterIdRaw = arrival.centerId;
+          const arrivalCenterName = String(arrival.centerName || "").trim();
+          const resolvedCenter =
+            centerById.get(String(arrivalCenterIdRaw)) ||
+            centerByName.get(normalizeCenterKey(arrivalCenterName));
+
+          const familyMemberRows = isFamily
+            ? getFamilyMemberRows(userData)
+            : [];
+          const totalMembersRaw = Number(
+            userData?.familyProfile?.totalMembers ?? arrival.memberCount,
+          );
+          const totalMembers = isFamily
+            ? Number.isFinite(totalMembersRaw) && totalMembersRaw > 0
+              ? Math.floor(totalMembersRaw)
+              : Math.max(1, familyMemberRows.length)
+            : 1;
+
+          entries.push({
+            id: userDoc.id,
+            userName:
+              String(userData?.fullName || "Resident").trim() || "Resident",
+            accountType: isFamily ? "Family" : "Individual",
+            centerId:
+              resolvedCenter?.id ??
+              (arrivalCenterIdRaw !== undefined && arrivalCenterIdRaw !== null
+                ? arrivalCenterIdRaw
+                : ""),
+            centerName:
+              resolvedCenter?.name || arrivalCenterName || "Evacuation Center",
+            memberCount: totalMembers,
+            familyMembers: familyMemberRows,
+            confirmedAt: arrival.confirmedAt || null,
+          });
+        });
+
+        setCenterRosterEntries(entries);
+      },
+      (error) => {
+        console.error("Failed to load center roster users:", error);
+        setRosterLoading(false);
+        setRosterError(
+          "Unable to load center occupants. Check Firestore read rules for users.",
+        );
+      },
+    );
+
+    return () => unsubscribe();
+  }, [centers]);
+
+  const filteredRosterEntries = React.useMemo(() => {
+    if (!selectedRosterCenterId) {
+      return centerRosterEntries;
+    }
+
+    return centerRosterEntries.filter((entry) => {
+      const entryCenterId = String(entry.centerId || "");
+      return entryCenterId === String(selectedRosterCenterId);
+    });
+  }, [centerRosterEntries, selectedRosterCenterId]);
 
   const handlePlanUpload = () => {
     if (
@@ -705,6 +848,94 @@ function GovEvacuationPlansPage({ evacuationCenters = [] }) {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className='bg-white rounded-lg shadow-sm p-6 border border-gray-200'>
+        <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4'>
+          <div>
+            <h4 className='text-sm font-black text-[#3a4a5b] uppercase'>
+              Evacuation Center Occupants
+            </h4>
+            <p className='text-xs text-gray-500 mt-1'>
+              Residents currently marked as arrived in the selected center.
+            </p>
+          </div>
+          <select
+            value={selectedRosterCenterId}
+            onChange={(event) => setSelectedRosterCenterId(event.target.value)}
+            className='w-full md:w-80 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-900'
+          >
+            {centers.length === 0 ? (
+              <option value=''>No centers available</option>
+            ) : (
+              centers.map((center) => (
+                <option key={`roster-center-${center.id}`} value={center.id}>
+                  {center.name}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
+
+        {rosterError ? (
+          <p className='text-sm text-red-600'>{rosterError}</p>
+        ) : rosterLoading ? (
+          <p className='text-sm text-gray-500'>Loading occupants...</p>
+        ) : filteredRosterEntries.length === 0 ? (
+          <p className='text-sm text-gray-500'>
+            No users currently marked as arrived in this center.
+          </p>
+        ) : (
+          <div className='space-y-3'>
+            {filteredRosterEntries.map((entry) => (
+              <div
+                key={`occupant-${entry.id}`}
+                className='rounded-lg border border-gray-200 bg-gray-50 p-3'
+              >
+                <div className='flex flex-wrap items-center gap-2 justify-between'>
+                  <div>
+                    <p className='text-sm font-bold text-[#3a4a5b]'>
+                      {entry.userName}
+                    </p>
+                    <p className='text-xs text-gray-500'>
+                      {entry.accountType} Account • {entry.centerName}
+                    </p>
+                  </div>
+                  <div className='text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-1 rounded-full'>
+                    Counted: {entry.memberCount}
+                  </div>
+                </div>
+
+                {entry.accountType === "Family" ? (
+                  <div className='mt-3 border-t border-gray-200 pt-2'>
+                    <p className='text-[11px] font-black text-slate-600 uppercase mb-2'>
+                      Family Members
+                    </p>
+                    <div className='space-y-1'>
+                      {entry.familyMembers.length === 0 ? (
+                        <p className='text-xs text-gray-500'>
+                          No members listed.
+                        </p>
+                      ) : (
+                        entry.familyMembers.map((member) => (
+                          <p
+                            key={`${entry.id}-${member.id}`}
+                            className='text-xs text-gray-700'
+                          >
+                            <span className='font-semibold'>{member.name}</span>{" "}
+                            <span className='text-gray-500'>
+                              ({member.relationship})
+                            </span>
+                          </p>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

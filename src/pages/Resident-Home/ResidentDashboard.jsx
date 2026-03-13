@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  Map,
+  Map as MapView,
   Marker,
   Source,
   Layer,
@@ -25,11 +25,19 @@ import {
   faTriangleExclamation,
   faRoute,
   faClock,
+  faCheckCircle,
 } from "@fortawesome/free-solid-svg-icons";
 
 // Firebase imports
 import { auth, db } from "../../firebase";
-import { collection, doc, getDoc, onSnapshot } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  runTransaction,
+  serverTimestamp,
+} from "firebase/firestore";
 
 // Component imports
 import ResidentDashboardHeader from "../../components/ResidentDashboardHeader";
@@ -64,6 +72,65 @@ const SOS_DISASTER_TYPE_OPTIONS = [
   { value: "medical", label: "Medical Emergency" },
   { value: "other", label: "Other" },
 ];
+
+const SOS_GUIDE_BY_DISASTER = {
+  flood: {
+    title: "Flood Response Guide",
+    steps: [
+      "Move to higher ground immediately and avoid rivers, canals, and low roads.",
+      "Switch off electricity if water is rising near outlets or appliances.",
+      "Keep your go-bag, medicines, charger, and important IDs in a dry bag.",
+    ],
+  },
+  earthquake: {
+    title: "Earthquake Response Guide",
+    steps: [
+      "Drop, cover, and hold on until the shaking stops.",
+      "Move away from glass, shelves, and anything that can fall.",
+      "After shaking stops, evacuate carefully and watch for aftershocks.",
+    ],
+  },
+  fire: {
+    title: "Fire Response Guide",
+    steps: [
+      "Leave the area immediately using the nearest safe exit.",
+      "Stay low if there is smoke and cover your nose and mouth with cloth.",
+      "Do not go back inside for belongings once you are out.",
+    ],
+  },
+  landslide: {
+    title: "Landslide Response Guide",
+    steps: [
+      "Move away from slopes, retaining walls, and downhill flow paths.",
+      "Watch for falling rocks, tilted trees, and sudden ground movement.",
+      "Head to an open, stable area and wait for official clearance.",
+    ],
+  },
+  typhoon: {
+    title: "Typhoon Response Guide",
+    steps: [
+      "Stay indoors or evacuate early if authorities instruct you to do so.",
+      "Keep windows secured and stay away from damaged roofs and power lines.",
+      "Prepare water, food, flashlights, medicines, and emergency contacts.",
+    ],
+  },
+  medical: {
+    title: "Medical Emergency Guide",
+    steps: [
+      "Stay where responders can reach you quickly unless the area is unsafe.",
+      "Keep required medicines, allergy details, and medical records ready.",
+      "If possible, contact a caregiver, family member, or nearby responder.",
+    ],
+  },
+  other: {
+    title: "Emergency Response Guide",
+    steps: [
+      "Move to the safest nearby area and stay visible to responders.",
+      "Keep your phone charged and maintain contact with trusted support people.",
+      "Follow official evacuation or shelter instructions as soon as they arrive.",
+    ],
+  },
+};
 
 const MAP_STYLE = {
   version: 8,
@@ -168,6 +235,17 @@ function getDisasterTypeLabel(disasterType) {
     .join(" ");
 }
 
+function toDateValue(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value.toDate === "function") {
+    return value.toDate();
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function renderCenterPin(isFull, mini = false) {
   const size = mini ? 20 : 26;
   const bgColor = isFull ? "#dc2626" : "#2563eb";
@@ -255,6 +333,9 @@ class ResidentDashboard extends React.Component {
       evacuationCenters: ResidentDashboard.EVACUATION_CENTERS.map((center) => ({
         ...center,
       })),
+      evacuationArrival: null,
+      confirmingArrivalCenterId: null,
+      clearingArrival: false,
       accessibilitySettings: {
         screenReader: false,
         highContrast: false,
@@ -301,6 +382,8 @@ class ResidentDashboard extends React.Component {
       this.startEvacuationCapacityListener.bind(this);
     this.getEventTimeLabel = this.getEventTimeLabel.bind(this);
     this.getNotificationItems = this.getNotificationItems.bind(this);
+    this.getActiveSosEventForCurrentUser =
+      this.getActiveSosEventForCurrentUser.bind(this);
     this.hasActiveSosForCurrentUser =
       this.hasActiveSosForCurrentUser.bind(this);
     this.handleTriggerSOS = this.handleTriggerSOS.bind(this);
@@ -316,6 +399,16 @@ class ResidentDashboard extends React.Component {
     this.handleShareLocation = this.handleShareLocation.bind(this);
     this.handleStopLocationShare = this.handleStopLocationShare.bind(this);
     this.getDirectionsUrl = this.getDirectionsUrl.bind(this);
+    this.getCenterCapacitySnapshot = this.getCenterCapacitySnapshot.bind(this);
+    this.getCapacityDocRefForCenter =
+      this.getCapacityDocRefForCenter.bind(this);
+    this.getEvacuationPartySizeFromUserData =
+      this.getEvacuationPartySizeFromUserData.bind(this);
+    this.getArrivalStatusLabel = this.getArrivalStatusLabel.bind(this);
+    this.handleConfirmArrival = this.handleConfirmArrival.bind(this);
+    this.handleClearArrival = this.handleClearArrival.bind(this);
+    this.isArrivalConfirmedForCenter =
+      this.isArrivalConfirmedForCenter.bind(this);
     this.handleTabChange = this.handleTabChange.bind(this);
     this.renderActiveTabPage = this.renderActiveTabPage.bind(this);
   }
@@ -448,6 +541,7 @@ class ResidentDashboard extends React.Component {
         userName: userData.fullName || "Resident",
         accountType: userData.accountType || userData.userType || "",
         userPhotoUrl: userData.photoUrl || "",
+        evacuationArrival: userData.evacuationArrival || null,
         accessibilitySettings: normalizeAccessibilitySettings(
           userData?.accessibilitySettings,
         ),
@@ -606,6 +700,7 @@ class ResidentDashboard extends React.Component {
             userName: userData.fullName || "Resident",
             accountType: userData.accountType || userData.userType || "",
             userPhotoUrl: userData.photoUrl || "",
+            evacuationArrival: userData.evacuationArrival || null,
             accessibilitySettings: normalizeAccessibilitySettings(
               userData?.accessibilitySettings,
             ),
@@ -890,6 +985,20 @@ class ResidentDashboard extends React.Component {
         };
       }
 
+      if (event.type === "evacuation-arrival") {
+        const isDeparted =
+          event.status === "departed" || event.status === "cleared";
+        return {
+          id: `feed-${event.id}`,
+          type: "update",
+          title: isDeparted ? "Departure Confirmed" : "Arrival Confirmed",
+          description: isDeparted
+            ? `${event.userName || "Resident"} confirmed departure from ${event.centerName || "the evacuation center"}.`
+            : `${event.userName || "Resident"} confirmed arrival at ${event.centerName || "an evacuation center"}.`,
+          meta: this.getEventTimeLabel(event),
+        };
+      }
+
       return {
         id: `feed-${event.id}`,
         type: "update",
@@ -918,12 +1027,12 @@ class ResidentDashboard extends React.Component {
     return unique.slice(0, 8);
   }
 
-  hasActiveSosForCurrentUser() {
+  getActiveSosEventForCurrentUser() {
     const { emergencyEvents } = this.state;
     const currentUserId = auth.currentUser?.uid;
 
     if (!currentUserId) {
-      return false;
+      return null;
     }
 
     const resolvedSourceEventIds = new Set(
@@ -932,14 +1041,20 @@ class ResidentDashboard extends React.Component {
         .map((event) => event.sourceEventId),
     );
 
-    return emergencyEvents.some(
-      (event) =>
-        event.type === "sos" &&
-        event.userId === currentUserId &&
-        event.status !== "resolved" &&
-        event.status !== "stopped" &&
-        !resolvedSourceEventIds.has(event.id),
+    return (
+      emergencyEvents.find(
+        (event) =>
+          event.type === "sos" &&
+          event.userId === currentUserId &&
+          event.status !== "resolved" &&
+          event.status !== "stopped" &&
+          !resolvedSourceEventIds.has(event.id),
+      ) || null
     );
+  }
+
+  hasActiveSosForCurrentUser() {
+    return Boolean(this.getActiveSosEventForCurrentUser());
   }
 
   confirmLowAccuracyProceed(accuracyMeters, mode = "sos") {
@@ -1345,11 +1460,410 @@ class ResidentDashboard extends React.Component {
     return `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lng.toFixed(6)}&travelmode=driving`;
   }
 
+  getCenterCapacitySnapshot(data, fallbackCenter = null) {
+    const fallback = parseCenterCapacityText(fallbackCenter?.capacity);
+    const rawCapacity =
+      data?.capacity ?? data?.maxCapacity ?? data?.totalCapacity;
+    const directHeadcount =
+      data?.headcount ?? data?.current ?? data?.occupied ?? data?.currentCount;
+    const rawAvailableSlots =
+      data?.availableSlots ?? data?.remainingSlots ?? data?.slotsAvailable;
+
+    const capacity =
+      Number.isFinite(Number(rawCapacity)) && Number(rawCapacity) > 0
+        ? Math.floor(Number(rawCapacity))
+        : fallback.capacity;
+    const parsedHeadcount = Number(directHeadcount);
+    const parsedAvailableSlots = Number(rawAvailableSlots);
+    const fallbackHeadcount = fallback.headcount;
+    const derivedHeadcount = Number.isFinite(parsedHeadcount)
+      ? Math.floor(parsedHeadcount)
+      : Number.isFinite(parsedAvailableSlots) && capacity > 0
+        ? Math.max(0, capacity - Math.floor(parsedAvailableSlots))
+        : fallbackHeadcount;
+
+    return {
+      capacity: Math.max(0, capacity),
+      headcount: Math.max(0, Math.min(derivedHeadcount, Math.max(0, capacity))),
+    };
+  }
+
+  getCapacityDocRefForCenter(centerLike) {
+    if (!centerLike) {
+      return null;
+    }
+
+    const explicitId = centerLike.centerId ?? centerLike.id;
+    if (
+      explicitId !== undefined &&
+      explicitId !== null &&
+      String(explicitId).trim()
+    ) {
+      return doc(db, "evacuationCenterCapacity", String(explicitId));
+    }
+
+    const matchedCenter = this.state.evacuationCenters.find(
+      (center) =>
+        normalizeCenterKey(center.name) ===
+        normalizeCenterKey(centerLike.centerName || centerLike.name),
+    );
+
+    if (!matchedCenter) {
+      return null;
+    }
+
+    return doc(db, "evacuationCenterCapacity", String(matchedCenter.id));
+  }
+
+  getEvacuationPartySizeFromUserData(userData) {
+    const normalizedAccountType = String(
+      userData?.accountType ||
+        userData?.userType ||
+        this.state.accountType ||
+        "",
+    )
+      .trim()
+      .toLowerCase();
+
+    if (normalizedAccountType !== "residential-family") {
+      return 1;
+    }
+
+    const familyProfile = userData?.familyProfile || {};
+    const declaredTotalMembers = Number(familyProfile.totalMembers);
+    const listedHouseholdMembers = Array.isArray(familyProfile.householdMembers)
+      ? familyProfile.householdMembers.filter((member) => {
+          return Boolean(
+            String(member?.name || "").trim() ||
+            String(member?.relationship || "").trim() ||
+            String(member?.dateOfBirth || member?.dob || "").trim(),
+          );
+        }).length
+      : 0;
+    const legacyDependents = Array.isArray(userData?.dependents)
+      ? userData.dependents.length
+      : 0;
+
+    const computedPartySize = Math.max(
+      Number.isFinite(declaredTotalMembers) && declaredTotalMembers > 0
+        ? Math.floor(declaredTotalMembers)
+        : 0,
+      listedHouseholdMembers > 0 ? listedHouseholdMembers + 1 : 0,
+      legacyDependents > 0 ? legacyDependents + 1 : 0,
+      1,
+    );
+
+    return computedPartySize;
+  }
+
+  getArrivalStatusLabel(arrival) {
+    const confirmedAt = toDateValue(arrival?.confirmedAt);
+    if (!confirmedAt) {
+      return "Arrival confirmed";
+    }
+
+    return `Arrived ${confirmedAt.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
+  }
+
+  isArrivalConfirmedForCenter(center) {
+    const { evacuationArrival } = this.state;
+    if (!evacuationArrival?.arrived || !center) {
+      return false;
+    }
+
+    if (String(evacuationArrival.centerId || "") === String(center.id || "")) {
+      return true;
+    }
+
+    return (
+      normalizeCenterKey(evacuationArrival.centerName) ===
+      normalizeCenterKey(center.name)
+    );
+  }
+
+  async handleConfirmArrival(center) {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !center) {
+      alert("You need to be signed in to confirm evacuation arrival.");
+      return;
+    }
+
+    this.setState({ confirmingArrivalCenterId: center.id });
+
+    try {
+      let confirmedPartySize = 1;
+      const userRef = doc(db, "users", currentUser.uid);
+      const targetCenterRef = this.getCapacityDocRefForCenter(center);
+
+      if (!targetCenterRef) {
+        throw new Error(
+          "Selected evacuation center capacity record was not found.",
+        );
+      }
+
+      await runTransaction(db, async (transaction) => {
+        const [userSnap, targetCenterSnap] = await Promise.all([
+          transaction.get(userRef),
+          transaction.get(targetCenterRef),
+        ]);
+
+        if (!targetCenterSnap.exists()) {
+          throw new Error(
+            "Selected evacuation center capacity record was not found.",
+          );
+        }
+
+        const userData = userSnap.exists() ? userSnap.data() : {};
+        const previousArrival = userData?.evacuationArrival || null;
+        const partySize = this.getEvacuationPartySizeFromUserData(userData);
+        confirmedPartySize = partySize;
+        const previousArrivalMemberCount = Number(previousArrival?.memberCount);
+        const previousPartySize =
+          Number.isFinite(previousArrivalMemberCount) &&
+          previousArrivalMemberCount > 0
+            ? Math.floor(previousArrivalMemberCount)
+            : partySize;
+        const targetCenterData = targetCenterSnap.data() || {};
+        const targetSnapshot = this.getCenterCapacitySnapshot(
+          targetCenterData,
+          center,
+        );
+        const isSameCenter =
+          previousArrival?.arrived &&
+          (String(previousArrival.centerId || "") === String(center.id) ||
+            normalizeCenterKey(previousArrival.centerName) ===
+              normalizeCenterKey(center.name));
+
+        let nextTargetHeadcount = targetSnapshot.headcount;
+        if (isSameCenter) {
+          const delta = partySize - previousPartySize;
+          if (delta > 0) {
+            if (
+              targetSnapshot.capacity > 0 &&
+              nextTargetHeadcount + delta > targetSnapshot.capacity
+            ) {
+              throw new Error(
+                "Selected evacuation center does not have enough available slots for your family size.",
+              );
+            }
+            nextTargetHeadcount += delta;
+          } else if (delta < 0) {
+            nextTargetHeadcount = Math.max(0, nextTargetHeadcount + delta);
+          }
+        } else {
+          if (
+            targetSnapshot.capacity > 0 &&
+            targetSnapshot.headcount + partySize > targetSnapshot.capacity
+          ) {
+            throw new Error(
+              "Selected evacuation center does not have enough available slots for your family size.",
+            );
+          }
+          nextTargetHeadcount = Math.min(
+            targetSnapshot.capacity || targetSnapshot.headcount + partySize,
+            targetSnapshot.headcount + partySize,
+          );
+        }
+
+        if (previousArrival?.arrived && !isSameCenter) {
+          const previousCenterRef =
+            this.getCapacityDocRefForCenter(previousArrival);
+          if (previousCenterRef) {
+            const previousCenterSnap = await transaction.get(previousCenterRef);
+            if (previousCenterSnap.exists()) {
+              const previousCenterState = this.getCenterCapacitySnapshot(
+                previousCenterSnap.data() || {},
+              );
+              const decrementedHeadcount = Math.max(
+                0,
+                previousCenterState.headcount - previousPartySize,
+              );
+              transaction.set(
+                previousCenterRef,
+                {
+                  headcount: decrementedHeadcount,
+                  availableSlots: Math.max(
+                    0,
+                    previousCenterState.capacity - decrementedHeadcount,
+                  ),
+                  updatedAt: serverTimestamp(),
+                },
+                { merge: true },
+              );
+            }
+          }
+        }
+
+        transaction.set(
+          targetCenterRef,
+          {
+            headcount: nextTargetHeadcount,
+            availableSlots: Math.max(
+              0,
+              targetSnapshot.capacity - nextTargetHeadcount,
+            ),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        transaction.set(
+          userRef,
+          {
+            evacuationArrival: {
+              arrived: true,
+              centerId: center.id,
+              centerName: center.name,
+              centerAddress: center.address,
+              memberCount: partySize,
+              source: "resident-dashboard",
+              confirmedAt: serverTimestamp(),
+            },
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      });
+
+      await EmergencyEventService.createEvent({
+        type: "evacuation-arrival",
+        status: "confirmed",
+        userId: currentUser.uid,
+        userName: this.state.userName,
+        centerId: center.id,
+        centerName: center.name,
+        centerAddress: center.address,
+        memberCount: confirmedPartySize,
+      });
+
+      this.setState({
+        evacuationArrival: {
+          arrived: true,
+          centerId: center.id,
+          centerName: center.name,
+          centerAddress: center.address,
+          memberCount: confirmedPartySize,
+          source: "resident-dashboard",
+          confirmedAt: new Date(),
+        },
+        confirmingArrivalCenterId: null,
+      });
+    } catch (error) {
+      console.error("Failed to confirm evacuation arrival:", error);
+      this.setState({ confirmingArrivalCenterId: null });
+      alert("Failed to confirm your arrival. Please try again.");
+    }
+  }
+
+  async handleClearArrival() {
+    const currentUser = auth.currentUser;
+    const { evacuationArrival } = this.state;
+    if (!currentUser || !evacuationArrival?.arrived) {
+      return;
+    }
+
+    this.setState({ clearingArrival: true });
+
+    try {
+      let departureMemberCount =
+        Number.isFinite(Number(evacuationArrival.memberCount)) &&
+        Number(evacuationArrival.memberCount) > 0
+          ? Math.floor(Number(evacuationArrival.memberCount))
+          : 1;
+      const userRef = doc(db, "users", currentUser.uid);
+      const centerRef = this.getCapacityDocRefForCenter(evacuationArrival);
+
+      await runTransaction(db, async (transaction) => {
+        const userSnap = await transaction.get(userRef);
+        const currentArrival = userSnap.exists()
+          ? userSnap.data()?.evacuationArrival || null
+          : evacuationArrival;
+
+        if (currentArrival?.arrived && centerRef) {
+          const centerSnap = await transaction.get(centerRef);
+          if (centerSnap.exists()) {
+            const currentArrivalMemberCount = Number(
+              currentArrival?.memberCount,
+            );
+            const departureCount =
+              Number.isFinite(currentArrivalMemberCount) &&
+              currentArrivalMemberCount > 0
+                ? Math.floor(currentArrivalMemberCount)
+                : this.getEvacuationPartySizeFromUserData(
+                    userSnap.data() || {},
+                  );
+            departureMemberCount = departureCount;
+            const centerState = this.getCenterCapacitySnapshot(
+              centerSnap.data() || {},
+            );
+            const decrementedHeadcount = Math.max(
+              0,
+              centerState.headcount - departureCount,
+            );
+            transaction.set(
+              centerRef,
+              {
+                headcount: decrementedHeadcount,
+                availableSlots: Math.max(
+                  0,
+                  centerState.capacity - decrementedHeadcount,
+                ),
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true },
+            );
+          }
+        }
+
+        transaction.set(
+          userRef,
+          {
+            evacuationArrival: {
+              arrived: false,
+              centerId: null,
+              centerName: "",
+              centerAddress: "",
+              source: "resident-dashboard",
+              confirmedAt: null,
+              clearedAt: serverTimestamp(),
+            },
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      });
+
+      await EmergencyEventService.createEvent({
+        type: "evacuation-arrival",
+        status: "departed",
+        userId: currentUser.uid,
+        userName: this.state.userName,
+        centerId: evacuationArrival.centerId || null,
+        centerName: evacuationArrival.centerName || "",
+        centerAddress: evacuationArrival.centerAddress || "",
+        memberCount: departureMemberCount,
+      });
+
+      this.setState({ evacuationArrival: null, clearingArrival: false });
+    } catch (error) {
+      console.error("Failed to clear evacuation arrival:", error);
+      this.setState({ clearingArrival: false });
+      alert("Failed to clear your arrival confirmation. Please try again.");
+    }
+  }
+
   /**
    * Render EvacCard sub-component
    * @private
    */
   renderEvacCard(center) {
+    const { confirmingArrivalCenterId, clearingArrival, evacuationArrival } =
+      this.state;
     const {
       name,
       address,
@@ -1362,6 +1876,13 @@ class ResidentDashboard extends React.Component {
       position,
     } = center;
     const nearCapacity = percent >= 90;
+    const isArrivedHere = this.isArrivalConfirmedForCenter(center);
+    const hasArrivalElsewhere =
+      evacuationArrival?.arrived &&
+      !isArrivedHere &&
+      evacuationArrival?.centerName;
+    const isConfirmingThisCenter =
+      String(confirmingArrivalCenterId) === String(center.id);
 
     return (
       <div
@@ -1421,6 +1942,55 @@ class ResidentDashboard extends React.Component {
             <FontAwesomeIcon icon={faRoute} /> Directions
           </a>
         </div>
+        <div className='mt-3 space-y-2'>
+          {isArrivedHere ? (
+            <div className='inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-emerald-700'>
+              <FontAwesomeIcon icon={faCheckCircle} />
+              {this.getArrivalStatusLabel(evacuationArrival)}
+            </div>
+          ) : null}
+          {hasArrivalElsewhere ? (
+            <p className='text-[10px] font-bold text-slate-500 uppercase tracking-wide'>
+              Current arrival: {evacuationArrival.centerName}
+            </p>
+          ) : null}
+          <div className='flex flex-wrap gap-2'>
+            <button
+              type='button'
+              onClick={(event) => {
+                event.stopPropagation();
+                this.handleConfirmArrival(center);
+              }}
+              disabled={isConfirmingThisCenter}
+              className='bg-emerald-600 text-white text-[10px] font-black px-3 py-2 rounded-full uppercase tracking-wide hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed'
+            >
+              {isConfirmingThisCenter
+                ? "Saving..."
+                : isArrivedHere
+                  ? "Update Arrival"
+                  : hasArrivalElsewhere
+                    ? "Switch Arrival"
+                    : "Confirm Arrival"}
+            </button>
+            {evacuationArrival?.arrived ? (
+              <button
+                type='button'
+                onClick={(event) => {
+                  event.stopPropagation();
+                  this.handleClearArrival();
+                }}
+                disabled={clearingArrival || !isArrivedHere}
+                className='bg-white border border-slate-200 text-slate-700 text-[10px] font-black px-3 py-2 rounded-full uppercase tracking-wide hover:border-slate-300 disabled:opacity-60 disabled:cursor-not-allowed'
+              >
+                {clearingArrival
+                  ? "Saving..."
+                  : isArrivedHere
+                    ? "Confirm Departure"
+                    : "Departure (Arrived Center Only)"}
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
     );
   }
@@ -1439,6 +2009,10 @@ class ResidentDashboard extends React.Component {
       isSharingLocation,
       accessibilitySettings,
       evacuationCenters,
+      emergencyEvents,
+      evacuationArrival,
+      confirmingArrivalCenterId,
+      clearingArrival,
     } = this.state;
     const centers = evacuationCenters;
     const selectedCenter =
@@ -1451,11 +2025,25 @@ class ResidentDashboard extends React.Component {
     const sosTimestampLabel = this.getSosTimestampLabel();
     const locationShareDurationLabel = this.getLocationShareDurationLabel();
     const notificationItems = this.getNotificationItems();
+    const activeSosEvent = this.getActiveSosEventForCurrentUser();
     const isSosLocked = this.hasActiveSosForCurrentUser();
+    const activeSosDisasterType = String(
+      activeSosEvent?.disasterType || selectedSosDisasterType || "",
+    )
+      .trim()
+      .toLowerCase();
+    const activeSosGuide = activeSosDisasterType
+      ? SOS_GUIDE_BY_DISASTER[activeSosDisasterType] ||
+        SOS_GUIDE_BY_DISASTER.other
+      : null;
+    const activeSosDisasterLabel = activeSosEvent?.disasterTypeLabel
+      ? activeSosEvent.disasterTypeLabel
+      : activeSosDisasterType
+        ? getDisasterTypeLabel(activeSosDisasterType)
+        : "";
     const accessibilityContainer = getAccessibilityContainerProps(
       accessibilitySettings,
     );
-
     return (
       <div
         className='min-h-screen bg-[#f3f4f6] font-sans text-slate-700'
@@ -1558,6 +2146,57 @@ class ResidentDashboard extends React.Component {
                           Live map view with center status, search, and quick
                           emergency guidance.
                         </p>
+                        {activeSosGuide && activeSosEvent ? (
+                          <div className='mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-4 shadow-sm'>
+                            <div className='flex items-center gap-2'>
+                              <div className='bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-wide'>
+                                Active SOS
+                              </div>
+                              <p className='text-[11px] font-black text-red-700 uppercase'>
+                                {activeSosDisasterLabel}
+                              </p>
+                            </div>
+                            <h4 className='mt-3 text-sm font-black text-slate-800 uppercase tracking-wide'>
+                              {activeSosGuide.title}
+                            </h4>
+                            <div className='mt-2 space-y-2'>
+                              {activeSosGuide.steps.map((step, index) => (
+                                <div
+                                  key={`${activeSosDisasterType}-guide-${index}`}
+                                  className='flex gap-2'
+                                >
+                                  <div className='mt-0.5 h-5 w-5 rounded-full bg-white border border-red-200 text-red-600 text-[10px] font-black flex items-center justify-center shrink-0'>
+                                    {index + 1}
+                                  </div>
+                                  <p className='text-xs font-medium text-slate-700 leading-relaxed'>
+                                    {step}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        {evacuationArrival?.arrived ? (
+                          <div className='mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 shadow-sm'>
+                            <div className='flex items-center gap-2'>
+                              <div className='bg-emerald-600 text-white text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-wide'>
+                                Arrival Confirmed
+                              </div>
+                              <p className='text-[11px] font-black text-emerald-700 uppercase'>
+                                {evacuationArrival.centerName ||
+                                  "Evacuation Center"}
+                              </p>
+                            </div>
+                            <p className='mt-2 text-xs font-medium text-slate-700'>
+                              {this.getArrivalStatusLabel(evacuationArrival)}
+                            </p>
+                            {evacuationArrival.centerAddress ? (
+                              <p className='mt-1 text-[11px] font-semibold text-slate-500 uppercase'>
+                                {evacuationArrival.centerAddress}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
                         <p className='text-xs font-semibold text-slate-600 mt-2 inline-flex items-center gap-1'>
                           <FontAwesomeIcon
                             icon={faClock}
@@ -1566,8 +2205,8 @@ class ResidentDashboard extends React.Component {
                           Last updated: {lastUpdatedLabel}
                         </p>
 
-                        <div className='relative h-140 w-full border border-slate-200 rounded-lg overflow-hidden z-0 mt-4'>
-                          <Map
+                        <div className='relative h-[34rem] sm:h-[38rem] lg:h-[44rem] w-full border border-slate-200 rounded-lg overflow-hidden z-0 mt-4'>
+                          <MapView
                             mapLib={maplibregl}
                             mapStyle={MAP_STYLE}
                             longitude={mapCenter[0]}
@@ -1660,7 +2299,7 @@ class ResidentDashboard extends React.Component {
                                 </Marker>
                               );
                             })}
-                          </Map>
+                          </MapView>
 
                           {/* SEARCH & RETURN CONTROLS */}
                           <div className='absolute top-4 left-4 right-4 z-501 flex items-center gap-2 px-1'>
@@ -1757,7 +2396,7 @@ class ResidentDashboard extends React.Component {
                           </div>
 
                           {/* EMERGENCY CONTACTS OVERLAY */}
-                          <div className='absolute bottom-4 left-4 w-72 bg-white/95 shadow-lg border border-slate-200 rounded-lg p-4 z-500'>
+                          <div className='absolute bottom-4 left-4 w-72 bg-white/95 shadow-lg border border-slate-200 rounded-lg p-4 z-500 hidden lg:block'>
                             <div className='flex items-center gap-2 mb-2'>
                               <FontAwesomeIcon
                                 icon={faShieldHeart}
@@ -1840,6 +2479,84 @@ class ResidentDashboard extends React.Component {
                             </div>
                           </div>
                         </div>
+
+                        <div className='mt-4 bg-white border border-slate-200 rounded-lg p-4 shadow-sm lg:hidden'>
+                          <div className='flex items-center gap-2 mb-2'>
+                            <FontAwesomeIcon
+                              icon={faShieldHeart}
+                              className='text-blue-700 text-sm'
+                            />
+                            <span className='text-xs font-black text-slate-800 uppercase'>
+                              Emergency Contacts
+                            </span>
+                          </div>
+                          <p className='text-[10px] font-bold text-slate-500 tracking-widest uppercase'>
+                            Sta. Maria Municipal Hall
+                          </p>
+                          <p className='text-sm font-black text-slate-700 underline decoration-blue-200'>
+                            +69 44 812 3400
+                          </p>
+                          <div className='mt-3'>
+                            <label
+                              htmlFor='sos-disaster-type-mobile'
+                              className='block text-[10px] font-black text-slate-700 uppercase tracking-wide mb-1'
+                            >
+                              SOS Disaster Type
+                            </label>
+                            <select
+                              id='sos-disaster-type-mobile'
+                              value={selectedSosDisasterType}
+                              onChange={this.handleSosDisasterTypeChange}
+                              className='w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200'
+                            >
+                              <option value=''>
+                                -- Select disaster type --
+                              </option>
+                              {SOS_DISASTER_TYPE_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className='mt-3 grid grid-cols-2 gap-2'>
+                            <button
+                              onClick={this.handleTriggerSosAndShare}
+                              disabled={isSosLocked || !selectedSosDisasterType}
+                              className='bg-red-600 text-white font-black py-2 rounded-xl text-[10px] hover:bg-red-700 uppercase tracking-wide transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-red-600 cursor-pointer'
+                            >
+                              {isSosLocked
+                                ? "SOS Active (Resolve First)"
+                                : "Trigger SOS + Share"}
+                            </button>
+                            {isSharingLocation ? (
+                              <button
+                                onClick={this.handleStopLocationShare}
+                                className='bg-slate-700 text-white font-black py-2 rounded-xl text-[10px] hover:bg-slate-800 uppercase tracking-wide transition-all'
+                              >
+                                Stop Sharing
+                              </button>
+                            ) : (
+                              <div className='bg-blue-50 border border-blue-100 text-blue-700 font-black py-2 rounded-xl text-[10px] uppercase tracking-wide text-center'>
+                                Share on SOS
+                              </div>
+                            )}
+                          </div>
+                          <div className='mt-3 space-y-1 border-t border-slate-200 pt-2'>
+                            <p className='text-[10px] font-bold text-slate-700 uppercase'>
+                              SOS timestamp:{" "}
+                              <span className='text-slate-500'>
+                                {sosTimestampLabel}
+                              </span>
+                            </p>
+                            <p className='text-[10px] font-bold text-slate-700 uppercase'>
+                              Shared location duration:{" "}
+                              <span className='text-slate-500'>
+                                {locationShareDurationLabel}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </section>
@@ -1902,7 +2619,7 @@ class ResidentDashboard extends React.Component {
                       Recommended Sites
                     </h3>
                     <div className='h-44 w-full border border-slate-200 rounded-lg relative overflow-hidden shadow-sm z-0 bg-white'>
-                      <Map
+                      <MapView
                         mapLib={maplibregl}
                         mapStyle={MAP_STYLE}
                         longitude={mapCenter[0]}
@@ -1934,7 +2651,7 @@ class ResidentDashboard extends React.Component {
                             </Marker>
                           );
                         })}
-                      </Map>
+                      </MapView>
                       <div className='absolute top-2 right-2 z-500'>
                         <button className='bg-white/95 px-2 py-1 rounded-full text-[10px] font-black shadow-sm border border-slate-200 uppercase'>
                           SATELLITE

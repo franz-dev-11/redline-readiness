@@ -145,3 +145,11 @@
   text-overflow: clip;
 }
 
+/* Bring the hovered marker's label in front of neighbouring labels */
+.maplibregl-marker {
+  z-index: 1;
+}
+.maplibregl-marker:hover {
+  z-index: 9999 !important;
+}
+

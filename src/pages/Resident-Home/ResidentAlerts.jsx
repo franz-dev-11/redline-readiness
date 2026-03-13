@@ -10,7 +10,7 @@ import {
   faCircleCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import { auth, db } from "../../firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot } from "firebase/firestore";
 import EmergencyEventService from "../../services/EmergencyEventService";
 
 const LOW_ACCURACY_THRESHOLD_METERS = 100;
@@ -80,11 +80,15 @@ class ResidentAlerts extends React.Component {
       selectedSosDisasterType: "",
       sosTriggeredAt: null,
       emergencyEvents: [],
+      evacuationUpdates: [],
+      evacuationUpdatesError: "",
     };
 
     this.fetchResidentProfile = this.fetchResidentProfile.bind(this);
     this.startEmergencyFeedListener =
       this.startEmergencyFeedListener.bind(this);
+    this.startEvacuationUpdatesListener =
+      this.startEvacuationUpdatesListener.bind(this);
     this.handleTriggerSOS = this.handleTriggerSOS.bind(this);
     this.confirmLowAccuracyProceed = this.confirmLowAccuracyProceed.bind(this);
     this.resolveCurrentLocation = this.resolveCurrentLocation.bind(this);
@@ -97,6 +101,8 @@ class ResidentAlerts extends React.Component {
     this.getTypeLabel = this.getTypeLabel.bind(this);
     this.handleResolveAlert = this.handleResolveAlert.bind(this);
     this.getResolvedSourceIds = this.getResolvedSourceIds.bind(this);
+    this.getActiveSosForCurrentUser =
+      this.getActiveSosForCurrentUser.bind(this);
     this.handleSosDisasterTypeChange =
       this.handleSosDisasterTypeChange.bind(this);
   }
@@ -104,11 +110,15 @@ class ResidentAlerts extends React.Component {
   componentDidMount() {
     this.fetchResidentProfile();
     this.startEmergencyFeedListener();
+    this.startEvacuationUpdatesListener();
   }
 
   componentWillUnmount() {
     if (this.emergencyFeedUnsubscribe) {
       this.emergencyFeedUnsubscribe();
+    }
+    if (this.evacuationUpdatesUnsubscribe) {
+      this.evacuationUpdatesUnsubscribe();
     }
   }
 
@@ -163,6 +173,81 @@ class ResidentAlerts extends React.Component {
       EmergencyEventService.subscribeToRecentEvents((events) => {
         this.setState({ emergencyEvents: events });
       }, 24);
+  }
+
+  startEvacuationUpdatesListener() {
+    if (this.evacuationUpdatesUnsubscribe) {
+      this.evacuationUpdatesUnsubscribe();
+    }
+
+    const capacityRef = collection(db, "evacuationCenterCapacity");
+
+    this.evacuationUpdatesUnsubscribe = onSnapshot(
+      capacityRef,
+      (snapshot) => {
+        const updates = snapshot.docs
+          .map((snapshotDoc) => {
+            const data = snapshotDoc.data() || {};
+            const rawCapacity =
+              data.capacity ?? data.maxCapacity ?? data.totalCapacity;
+            const rawHeadcount =
+              data.headcount ?? data.current ?? data.occupied ?? data.currentCount;
+            const rawAvailableSlots =
+              data.availableSlots ?? data.remainingSlots ?? data.slotsAvailable;
+
+            const capacity = Number(rawCapacity);
+            const headcount = Number(rawHeadcount);
+            const availableSlots = Number(rawAvailableSlots);
+            const normalizedCapacity =
+              Number.isFinite(capacity) && capacity >= 0 ? Math.floor(capacity) : 0;
+            const normalizedHeadcount =
+              Number.isFinite(headcount) && headcount >= 0
+                ? Math.floor(headcount)
+                : Number.isFinite(availableSlots) && availableSlots >= 0
+                  ? Math.max(0, normalizedCapacity - Math.floor(availableSlots))
+                  : 0;
+            const boundedHeadcount = Math.max(
+              0,
+              Math.min(normalizedHeadcount, Math.max(0, normalizedCapacity)),
+            );
+            const boundedAvailableSlots = Math.max(
+              0,
+              Number.isFinite(availableSlots) && availableSlots >= 0
+                ? Math.floor(availableSlots)
+                : normalizedCapacity - boundedHeadcount,
+            );
+
+            return {
+              id: snapshotDoc.id,
+              centerId: data.centerId ?? snapshotDoc.id,
+              centerName: data.centerName || data.name || "Evacuation Center",
+              address: data.address || data.location || "Location unavailable",
+              capacity: normalizedCapacity,
+              headcount: boundedHeadcount,
+              availableSlots: boundedAvailableSlots,
+              updatedAt: data.updatedAt || null,
+            };
+          })
+          .sort((a, b) => {
+            const aTime = a.updatedAt?.toDate ? a.updatedAt.toDate().getTime() : 0;
+            const bTime = b.updatedAt?.toDate ? b.updatedAt.toDate().getTime() : 0;
+            return bTime - aTime;
+          });
+
+        this.setState({
+          evacuationUpdates: updates,
+          evacuationUpdatesError: "",
+        });
+      },
+      (error) => {
+        console.error("Failed to load evacuation updates:", error);
+        this.setState({
+          evacuationUpdates: [],
+          evacuationUpdatesError:
+            "Unable to load evacuation center updates right now.",
+        });
+      },
+    );
   }
 
   async resolveLocationLabelFromCoordinates(latitude, longitude) {
@@ -316,6 +401,13 @@ class ResidentAlerts extends React.Component {
 
     if (sendingSos || !currentUser) return;
 
+    if (this.getActiveSosForCurrentUser()) {
+      alert(
+        "You already have an active SOS alert. Resolve the current alert before creating another one.",
+      );
+      return;
+    }
+
     const confirmed = window.confirm(
       "Trigger SOS now? This will notify responders and share your emergency details.",
     );
@@ -394,16 +486,7 @@ class ResidentAlerts extends React.Component {
   }
 
   getEvacuationUpdates() {
-    const { emergencyEvents } = this.state;
-
-    return emergencyEvents.filter(
-      (event) =>
-        event.type === "evacuation-update" ||
-        (event.type === "announcement" &&
-          (event.category === "evacuation" ||
-            event.centerName ||
-            event.updatedSlots)),
-    );
+    return this.state.evacuationUpdates;
   }
 
   getTypeLabel(type) {
@@ -429,6 +512,26 @@ class ResidentAlerts extends React.Component {
     });
 
     return resolvedSet;
+  }
+
+  getActiveSosForCurrentUser() {
+    const { emergencyEvents, currentUserId } = this.state;
+    const resolvedSourceIds = this.getResolvedSourceIds();
+
+    if (!currentUserId) {
+      return null;
+    }
+
+    return (
+      emergencyEvents.find(
+        (event) =>
+          event.type === "sos" &&
+          event.userId === currentUserId &&
+          event.status !== "resolved" &&
+          event.status !== "stopped" &&
+          !resolvedSourceIds.has(event.id),
+      ) || null
+    );
   }
 
   getAlertHistory() {
@@ -510,11 +613,13 @@ class ResidentAlerts extends React.Component {
       medicalNeeds,
       selectedSosDisasterType,
       sosTriggeredAt,
+      evacuationUpdatesError,
     } = this.state;
 
     const announcements = this.getAnnouncements();
     const evacuationUpdates = this.getEvacuationUpdates();
     const alertHistory = this.getAlertHistory();
+    const hasActiveSos = Boolean(this.getActiveSosForCurrentUser());
     const activeAlertHistory = alertHistory.filter(
       (item) => item.status === "Active",
     );
@@ -609,13 +714,23 @@ class ResidentAlerts extends React.Component {
           <div className='mt-4 flex items-center gap-3'>
             <button
               onClick={this.handleTriggerSOS}
-              disabled={sendingSos || loading || !selectedSosDisasterType}
+              disabled={
+                sendingSos ||
+                loading ||
+                hasActiveSos ||
+                !selectedSosDisasterType
+              }
               className='bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-black uppercase hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {sendingSos ? (
                 <>
                   <FontAwesomeIcon icon={faSpinner} spin className='mr-2' />
                   Sending SOS...
+                </>
+              ) : hasActiveSos ? (
+                <>
+                  <FontAwesomeIcon icon={faCircleCheck} className='mr-2' />
+                  SOS Active
                 </>
               ) : (
                 <>
@@ -697,7 +812,16 @@ class ResidentAlerts extends React.Component {
           </p>
 
           <div className='mt-4 space-y-3'>
-            {evacuationUpdates.length === 0 ? (
+            {evacuationUpdatesError ? (
+              <div className='border border-red-200 bg-red-50 rounded-xl p-4'>
+                <p className='text-xs font-black text-red-700 uppercase flex items-center gap-2'>
+                  <FontAwesomeIcon icon={faHouseFloodWater} /> Update Load Error
+                </p>
+                <p className='text-sm font-semibold text-slate-700 mt-1'>
+                  {evacuationUpdatesError}
+                </p>
+              </div>
+            ) : evacuationUpdates.length === 0 ? (
               <div className='border border-amber-200 bg-amber-50 rounded-xl p-4'>
                 <p className='text-xs font-black text-amber-700 uppercase flex items-center gap-2'>
                   <FontAwesomeIcon icon={faHouseFloodWater} /> No capacity
@@ -706,12 +830,6 @@ class ResidentAlerts extends React.Component {
               </div>
             ) : (
               evacuationUpdates.map((update) => {
-                const updateDisasterType =
-                  update.disasterTypeLabel ||
-                  (update.disasterType
-                    ? getDisasterTypeLabel(update.disasterType)
-                    : "");
-
                 return (
                   <div
                     key={update.id}
@@ -725,13 +843,20 @@ class ResidentAlerts extends React.Component {
                       Center name: {update.centerName || "Unspecified Center"}
                     </p>
                     <p className='text-sm font-semibold text-slate-700'>
-                      Updated slots: {update.updatedSlots || "Not provided"}
+                      Headcount: {update.headcount}
                     </p>
-                    {updateDisasterType && (
-                      <p className='text-[11px] font-black text-red-600 uppercase mt-2'>
-                        Disaster type: {updateDisasterType}
-                      </p>
-                    )}
+                    <p className='text-sm font-semibold text-slate-700'>
+                      Available slots: {update.availableSlots}
+                    </p>
+                    <p className='text-sm font-semibold text-slate-700'>
+                      Capacity: {update.capacity}
+                    </p>
+                    <p className='text-[11px] font-bold text-slate-500 uppercase mt-2'>
+                      {update.address}
+                    </p>
+                    <div className='mt-2 text-[11px] font-bold text-slate-500 uppercase'>
+                      Last updated: {this.formatDateTime(update.updatedAt)}
+                    </div>
                   </div>
                 );
               })

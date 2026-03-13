@@ -12,14 +12,21 @@ import {
   faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 import {
-  Map,
+  Map as MapView,
   Marker,
   Source,
   Layer,
   NavigationControl,
 } from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
-import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocsFromServer,
+  onSnapshot,
+  query,
+  where,
+} from "firebase/firestore";
 import { db } from "../../firebase";
 import Header from "../../components/Header";
 import AuthService from "../../services/AuthService";
@@ -165,6 +172,8 @@ class GovernmentDashboard extends React.Component {
           coordinates: [14.8245, 120.9517],
         },
       ],
+      evacuationCenterSummaryRows: [],
+      evacuationCapacityError: "",
 
       // Map center (Sta. Maria, Bulacan)
       mapCenter: [14.8285, 120.9577],
@@ -186,6 +195,7 @@ class GovernmentDashboard extends React.Component {
       announcementTargetGroup: "all",
       postingAnnouncement: false,
       resolvingSosEventId: null,
+      selectedSosEventId: null,
       qrScanValue: "",
       qrScanResult: null,
       qrScanError: "",
@@ -213,6 +223,10 @@ class GovernmentDashboard extends React.Component {
       this.startRegisteredUsersListener.bind(this);
     this.startEvacuationCapacityListener =
       this.startEvacuationCapacityListener.bind(this);
+    this.applyEvacuationCapacitySnapshot =
+      this.applyEvacuationCapacitySnapshot.bind(this);
+    this.fetchEvacuationCapacityFromServer =
+      this.fetchEvacuationCapacityFromServer.bind(this);
     this.getEmergencyEventTimeLabel =
       this.getEmergencyEventTimeLabel.bind(this);
     this.handleAnnouncementTitleInput =
@@ -337,122 +351,203 @@ class GovernmentDashboard extends React.Component {
     this.capacityUnsubscribe = onSnapshot(
       capacityRef,
       (snapshot) => {
-        const updatesByCenterId = new Map();
+        this.applyEvacuationCapacitySnapshot(snapshot);
 
-        snapshot.forEach((centerDoc) => {
-          const data = centerDoc.data() || {};
-          const rawCenterId = data.centerId ?? centerDoc.id;
-          const numericCenterId = Number(rawCenterId);
-          const centerId = Number.isFinite(numericCenterId)
-            ? numericCenterId
-            : String(rawCenterId);
-
-          updatesByCenterId.set(String(centerId), {
-            centerId,
-            name: data.centerName,
-            location: data.address,
-            capacity: Number(data.capacity),
-            headcount: Number(data.headcount),
-          });
-        });
-
-        this.setState((prevState) => {
-          const updatesByCenterName = new Map();
-          updatesByCenterId.forEach((update) => {
-            const key = normalizeCenterKey(update.name);
-            if (key) {
-              updatesByCenterName.set(key, update);
-            }
-          });
-
-          const merged = prevState.evacuationCenters.map((center) => {
-            const update =
-              updatesByCenterId.get(String(center.id)) ||
-              updatesByCenterName.get(normalizeCenterKey(center.name));
-            if (!update) {
-              return center;
-            }
-
-            const nextCapacity =
-              Number.isFinite(update.capacity) && update.capacity > 0
-                ? update.capacity
-                : 0;
-            const rawHeadcount =
-              Number.isFinite(update.headcount) && update.headcount >= 0
-                ? update.headcount
-                : 0;
-            const nextCurrent = Math.max(
-              0,
-              Math.min(rawHeadcount, Math.max(0, nextCapacity)),
-            );
-            const occupancy = nextCapacity > 0 ? nextCurrent / nextCapacity : 0;
-
-            return {
-              ...center,
-              location: update.location || center.location,
-              capacity: nextCapacity,
-              current: nextCurrent,
-              status:
-                occupancy >= 0.95
-                  ? "critical"
-                  : occupancy >= 0.85
-                    ? "warning"
-                    : "available",
-            };
-          });
-
-          const existingIds = new Set(
-            merged.map((center) => String(center.id)),
-          );
-          const appended = [];
-
-          updatesByCenterId.forEach((update) => {
-            if (existingIds.has(String(update.centerId))) {
-              return;
-            }
-
-            const nextCapacity =
-              Number.isFinite(update.capacity) && update.capacity > 0
-                ? update.capacity
-                : 0;
-            const rawHeadcount =
-              Number.isFinite(update.headcount) && update.headcount >= 0
-                ? update.headcount
-                : 0;
-            const nextCurrent = Math.max(
-              0,
-              Math.min(rawHeadcount, Math.max(0, nextCapacity)),
-            );
-            const occupancy = nextCapacity > 0 ? nextCurrent / nextCapacity : 0;
-
-            appended.push({
-              id: update.centerId,
-              name: update.name || "Evacuation Center",
-              location: update.location || "Unknown location",
-              capacity: nextCapacity,
-              current: nextCurrent,
-              status:
-                occupancy >= 0.95
-                  ? "critical"
-                  : occupancy >= 0.85
-                    ? "warning"
-                    : "available",
-              coordinates: prevState.mapCenter,
-            });
-          });
-
-          return {
-            evacuationCenters: [...merged, ...appended],
-          };
-        });
+        if (snapshot.empty) {
+          this.fetchEvacuationCapacityFromServer();
+        }
       },
       (error) => {
         console.error(
           "[GovernmentDashboard] Failed to auto-load center capacity:",
           error,
         );
+
+        const isPermissionError =
+          error?.code === "permission-denied" ||
+          String(error?.message || "")
+            .toLowerCase()
+            .includes("permission-denied");
+
+        this.setState({
+          evacuationCapacityError: isPermissionError
+            ? "Unable to read evacuationCenterCapacity (permission denied). Check Firestore rules for your government role."
+            : "Unable to load evacuationCenterCapacity right now. Please refresh and try again.",
+        });
       },
     );
+  }
+
+  applyEvacuationCapacitySnapshot(snapshotLike) {
+    const updatesByCenterId = new Map();
+
+    snapshotLike.forEach((centerDoc) => {
+      const data = centerDoc.data() || {};
+      const rawCenterId = data.centerId ?? centerDoc.id;
+      const numericCenterId = Number(rawCenterId);
+      const centerId = Number.isFinite(numericCenterId)
+        ? numericCenterId
+        : String(rawCenterId);
+
+      const rawCapacity =
+        data.capacity ?? data.maxCapacity ?? data.totalCapacity;
+      const directHeadcount =
+        data.headcount ?? data.current ?? data.occupied ?? data.currentCount;
+      const rawAvailableSlots =
+        data.availableSlots ?? data.remainingSlots ?? data.slotsAvailable;
+      const centerName = data.centerName || data.name || data.center || "";
+      const address = data.address || data.location || data.centerAddress || "";
+
+      const parsedCapacity = Number(rawCapacity);
+      const parsedHeadcount = Number(directHeadcount);
+      const parsedAvailableSlots = Number(rawAvailableSlots);
+
+      const derivedHeadcount = Number.isFinite(parsedHeadcount)
+        ? parsedHeadcount
+        : Number.isFinite(parsedCapacity) &&
+            Number.isFinite(parsedAvailableSlots)
+          ? Math.max(0, parsedCapacity - parsedAvailableSlots)
+          : NaN;
+
+      updatesByCenterId.set(String(centerId), {
+        centerId,
+        name: centerName,
+        location: address,
+        capacity: parsedCapacity,
+        headcount: derivedHeadcount,
+      });
+    });
+
+    const summaryRows = Array.from(updatesByCenterId.values())
+      .map((update) => {
+        const nextCapacity =
+          Number.isFinite(update.capacity) && update.capacity > 0
+            ? Math.floor(update.capacity)
+            : 0;
+        const rawHeadcount =
+          Number.isFinite(update.headcount) && update.headcount >= 0
+            ? Math.floor(update.headcount)
+            : 0;
+        const nextCurrent = Math.max(
+          0,
+          Math.min(rawHeadcount, Math.max(0, nextCapacity)),
+        );
+
+        return {
+          id: update.centerId,
+          name: update.name || "Evacuation Center",
+          capacity: nextCapacity,
+          current: nextCurrent,
+        };
+      })
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+    this.setState((prevState) => {
+      const updatesByCenterName = new Map();
+      updatesByCenterId.forEach((update) => {
+        const key = normalizeCenterKey(update.name);
+        if (key) {
+          updatesByCenterName.set(key, update);
+        }
+      });
+
+      const merged = prevState.evacuationCenters.map((center) => {
+        const update =
+          updatesByCenterId.get(String(center.id)) ||
+          updatesByCenterName.get(normalizeCenterKey(center.name));
+        if (!update) {
+          return center;
+        }
+
+        const nextCapacity =
+          Number.isFinite(update.capacity) && update.capacity > 0
+            ? update.capacity
+            : 0;
+        const rawHeadcount =
+          Number.isFinite(update.headcount) && update.headcount >= 0
+            ? update.headcount
+            : 0;
+        const nextCurrent = Math.max(
+          0,
+          Math.min(rawHeadcount, Math.max(0, nextCapacity)),
+        );
+        const occupancy = nextCapacity > 0 ? nextCurrent / nextCapacity : 0;
+
+        return {
+          ...center,
+          location: update.location || center.location,
+          capacity: nextCapacity,
+          current: nextCurrent,
+          status:
+            occupancy >= 0.95
+              ? "critical"
+              : occupancy >= 0.85
+                ? "warning"
+                : "available",
+        };
+      });
+
+      const existingIds = new Set(merged.map((center) => String(center.id)));
+      const appended = [];
+
+      updatesByCenterId.forEach((update) => {
+        if (existingIds.has(String(update.centerId))) {
+          return;
+        }
+
+        const nextCapacity =
+          Number.isFinite(update.capacity) && update.capacity > 0
+            ? update.capacity
+            : 0;
+        const rawHeadcount =
+          Number.isFinite(update.headcount) && update.headcount >= 0
+            ? update.headcount
+            : 0;
+        const nextCurrent = Math.max(
+          0,
+          Math.min(rawHeadcount, Math.max(0, nextCapacity)),
+        );
+        const occupancy = nextCapacity > 0 ? nextCurrent / nextCapacity : 0;
+
+        appended.push({
+          id: update.centerId,
+          name: update.name || "Evacuation Center",
+          location: update.location || "Unknown location",
+          capacity: nextCapacity,
+          current: nextCurrent,
+          status:
+            occupancy >= 0.95
+              ? "critical"
+              : occupancy >= 0.85
+                ? "warning"
+                : "available",
+          coordinates: prevState.mapCenter,
+        });
+      });
+
+      return {
+        evacuationCenters: [...merged, ...appended],
+        evacuationCenterSummaryRows: summaryRows,
+        evacuationCapacityError: "",
+      };
+    });
+  }
+
+  async fetchEvacuationCapacityFromServer() {
+    try {
+      const snapshot = await getDocsFromServer(
+        collection(db, "evacuationCenterCapacity"),
+      );
+
+      if (!snapshot.empty) {
+        this.applyEvacuationCapacitySnapshot(snapshot);
+      }
+    } catch (error) {
+      console.error(
+        "[GovernmentDashboard] Failed to fetch center capacity from server:",
+        error,
+      );
+    }
   }
 
   startUserProfileListener(userId) {
@@ -486,7 +581,7 @@ class GovernmentDashboard extends React.Component {
           emergencyEvents: events,
           emergencyFeedLoading: false,
         });
-      }, 8);
+      }, 40);
   }
 
   getEmergencyEventTimeLabel(event) {
@@ -726,7 +821,7 @@ class GovernmentDashboard extends React.Component {
     return "Location not shared";
   }
 
-  handleShowResidentPin(coordinates) {
+  handleShowResidentPin(coordinates, eventId) {
     if (!Array.isArray(coordinates) || coordinates.length < 2) {
       return;
     }
@@ -742,6 +837,7 @@ class GovernmentDashboard extends React.Component {
       mapDisplayMode: "sos-view",
       mapCenter: [lat, lng],
       mapZoom: Math.max(Number(this.state.mapZoom) || 14, 16),
+      selectedSosEventId: eventId || null,
     });
   }
 
@@ -1007,8 +1103,14 @@ class GovernmentDashboard extends React.Component {
       qrScanResult,
       qrScanError,
       resolvingSosEventId,
+      selectedSosEventId,
+      evacuationCenterSummaryRows,
+      evacuationCapacityError,
     } = this.state;
     const recentFeedEvents = emergencyEvents.slice(0, 8);
+    const evacuationCenterLogs = emergencyEvents
+      .filter((event) => event.type === "evacuation-arrival")
+      .slice(0, 12);
     const resolvedSourceEventIds = new Set(
       emergencyEvents
         .filter((event) => event.type === "resolution" && event.sourceEventId)
@@ -1180,7 +1282,7 @@ class GovernmentDashboard extends React.Component {
             </div>
 
             <div className='rounded-lg h-110 overflow-hidden border border-gray-200'>
-              <Map
+              <MapView
                 mapLib={maplibregl}
                 mapStyle={MAP_STYLE}
                 longitude={mapCenter[1]}
@@ -1272,6 +1374,8 @@ class GovernmentDashboard extends React.Component {
                     const coordinates = this.getEventCoordinates(event);
                     const lngLat = toLngLat(coordinates);
                     if (!lngLat) return null;
+                    const isSelected =
+                      event.id && event.id === selectedSosEventId;
 
                     return (
                       <Marker
@@ -1281,14 +1385,81 @@ class GovernmentDashboard extends React.Component {
                         anchor='bottom'
                       >
                         <div className='flex flex-col items-center gap-1'>
-                          <div className='map-pin-label map-pin-label--full'>
+                          <div
+                            className='map-pin-label map-pin-label--full'
+                            style={
+                              isSelected
+                                ? {
+                                    background: "#dc2626",
+                                    color: "#fff",
+                                    fontWeight: 800,
+                                  }
+                                : {}
+                            }
+                          >
                             {event.userName || "SOS Alert"}
                           </div>
-                          {renderMapPin("#dc2626")}
+                          {isSelected ? (
+                            <div
+                              style={{
+                                position: "relative",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  width: 52,
+                                  height: 52,
+                                  borderRadius: "50%",
+                                  border: "3px solid #dc2626",
+                                  opacity: 0.5,
+                                  animation:
+                                    "gov-pin-pulse 1.4s ease-out infinite",
+                                }}
+                              />
+                              <div
+                                style={{
+                                  backgroundColor: "#dc2626",
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: "50%",
+                                  border: "3px solid white",
+                                  boxShadow:
+                                    "0 0 0 4px rgba(220,38,38,0.35), 0 8px 20px rgba(220,38,38,0.5)",
+                                  position: "relative",
+                                  zIndex: 1,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: "50%",
+                                    background: "#fff",
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            renderMapPin("#dc2626")
+                          )}
                         </div>
                       </Marker>
                     );
                   })}
+                <style>{`
+                  @keyframes gov-pin-pulse {
+                    0%   { transform: scale(0.85); opacity: 0.7; }
+                    70%  { transform: scale(1.6);  opacity: 0; }
+                    100% { transform: scale(0.85); opacity: 0; }
+                  }
+                `}</style>
 
                 {effectiveMapMode === "evacuation-view" &&
                   evacuationCenters.map((center) => {
@@ -1316,7 +1487,7 @@ class GovernmentDashboard extends React.Component {
                       </Marker>
                     );
                   })}
-              </Map>
+              </MapView>
             </div>
           </div>
 
@@ -1341,15 +1512,34 @@ class GovernmentDashboard extends React.Component {
                   {activeSosEvents.slice(0, 8).map((event) => {
                     const user = getUserByEvent(event);
                     const coordinates = this.getEventCoordinates(event);
+                    const isSelected =
+                      event.id && event.id === selectedSosEventId;
 
                     return (
                       <div
                         key={event.id}
-                        className='rounded-lg border border-red-100 bg-red-50 px-3 py-2'
+                        className={`rounded-lg border px-3 py-2 transition-colors ${
+                          isSelected
+                            ? "border-red-500 bg-red-100 ring-2 ring-red-400"
+                            : "border-red-100 bg-red-50"
+                        }`}
                       >
                         <p className='text-xs font-black text-red-700 uppercase'>
                           {event.userName || user?.fullName || "Resident"}
                         </p>
+                        {event.disasterTypeLabel || event.disasterType ? (
+                          <p className='text-[11px] mt-1'>
+                            <span
+                              className='inline-block px-2 py-0.5 rounded-full text-white font-bold uppercase tracking-wide'
+                              style={{
+                                backgroundColor: "#dc2626",
+                                fontSize: "0.65rem",
+                              }}
+                            >
+                              {event.disasterTypeLabel || event.disasterType}
+                            </span>
+                          </p>
+                        ) : null}
                         <p className='text-[11px] text-gray-700 mt-1'>
                           <span className='font-bold'>Location:</span>{" "}
                           {this.getEventLocationLabel(event)}
@@ -1374,11 +1564,17 @@ class GovernmentDashboard extends React.Component {
                         </button>
                         <button
                           type='button'
-                          onClick={() => this.handleShowResidentPin(coordinates)}
+                          onClick={() =>
+                            this.handleShowResidentPin(coordinates, event.id)
+                          }
                           disabled={!coordinates}
-                          className='mt-2 ml-2 inline-block px-3 py-1.5 bg-blue-600 text-white rounded text-[11px] font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                          className={`mt-2 ml-2 inline-block px-3 py-1.5 rounded text-[11px] font-bold disabled:opacity-50 disabled:cursor-not-allowed ${
+                            isSelected
+                              ? "bg-red-600 text-white hover:bg-red-700"
+                              : "bg-blue-600 text-white hover:bg-blue-700"
+                          }`}
                         >
-                          Show Pin
+                          {isSelected ? "Pinned ✓" : "Show Pin"}
                         </button>
                       </div>
                     );
@@ -1513,39 +1709,53 @@ class GovernmentDashboard extends React.Component {
                   </tr>
                 </thead>
                 <tbody>
-                  {evacuationCenters.map((center) => {
-                    const availableSlots = Math.max(
-                      0,
-                      center.capacity - center.current,
-                    );
-                    return (
-                      <tr
-                        key={`summary-${center.id}`}
-                        className='border-b border-gray-100'
-                      >
-                        <td className='py-2 pr-2 font-semibold text-[#3a4a5b]'>
-                          {center.name}
-                        </td>
-                        <td className='py-2 pr-2 text-gray-700'>
-                          {center.capacity}
-                        </td>
-                        <td className='py-2 pr-2 text-gray-700'>
-                          {center.current}
-                        </td>
-                        <td className='py-2'>
-                          <span
-                            className={`font-bold ${
-                              availableSlots <= 5
-                                ? "text-red-600"
-                                : "text-green-600"
-                            }`}
-                          >
-                            {availableSlots}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {evacuationCapacityError ? (
+                    <tr>
+                      <td className='py-3 text-sm text-red-600' colSpan={4}>
+                        {evacuationCapacityError}
+                      </td>
+                    </tr>
+                  ) : evacuationCenterSummaryRows.length === 0 ? (
+                    <tr>
+                      <td className='py-3 text-sm text-gray-500' colSpan={4}>
+                        No capacity records found in evacuationCenterCapacity.
+                      </td>
+                    </tr>
+                  ) : (
+                    evacuationCenterSummaryRows.map((center) => {
+                      const availableSlots = Math.max(
+                        0,
+                        center.capacity - center.current,
+                      );
+                      return (
+                        <tr
+                          key={`summary-${center.id}`}
+                          className='border-b border-gray-100'
+                        >
+                          <td className='py-2 pr-2 font-semibold text-[#3a4a5b]'>
+                            {center.name}
+                          </td>
+                          <td className='py-2 pr-2 text-gray-700'>
+                            {center.capacity}
+                          </td>
+                          <td className='py-2 pr-2 text-gray-700'>
+                            {center.current}
+                          </td>
+                          <td className='py-2'>
+                            <span
+                              className={`font-bold ${
+                                availableSlots <= 5
+                                  ? "text-red-600"
+                                  : "text-green-600"
+                              }`}
+                            >
+                              {availableSlots}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1553,56 +1763,117 @@ class GovernmentDashboard extends React.Component {
 
           <div className='xl:col-span-5 bg-white rounded-lg shadow-sm p-4 border border-gray-200'>
             <h3 className='text-sm font-black text-[#3a4a5b] uppercase mb-3'>
-              Audit Log Snapshot
+              Evacuation Center Logs
             </h3>
 
-            {recentFeedEvents.length === 0 ? (
-              <p className='text-sm text-gray-500'>No recent activity.</p>
+            {evacuationCenterLogs.length === 0 ? (
+              <p className='text-sm text-gray-500'>
+                No evacuation center logs yet.
+              </p>
             ) : (
-              <div className='space-y-2 max-h-80 overflow-y-auto pr-1'>
-                {recentFeedEvents.map((event) => {
-                  const isGovernmentResolver =
-                    event.role === "government" ||
-                    event.accountType === "government" ||
-                    String(event.userName || "")
-                      .toLowerCase()
-                      .includes("government");
-                  const resolverDisplayName =
-                    String(event.userName || "").trim() ||
-                    (isGovernmentResolver
-                      ? "Government account"
-                      : "Resident account");
-                  const actionLabel =
-                    event.type === "sos"
-                      ? "SOS Triggered"
-                      : event.type === "announcement"
-                        ? "LGU Announcement Posted"
-                        : event.type === "resolution"
-                          ? event.resolutionNote ||
-                            `Resolved by ${resolverDisplayName}`
-                          : "Activity Logged";
+              <div className='space-y-2 max-h-52 overflow-y-auto pr-1'>
+                {evacuationCenterLogs.map((event) => {
+                  const memberCountRaw = Number(event.memberCount);
+                  const memberCount =
+                    Number.isFinite(memberCountRaw) && memberCountRaw > 0
+                      ? Math.floor(memberCountRaw)
+                      : 1;
+                  const isDeparture =
+                    event.status === "departed" || event.status === "cleared";
 
                   return (
                     <div
-                      key={`audit-${event.id}`}
+                      key={`evac-log-${event.id}`}
                       className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2'
                     >
                       <p className='text-xs text-gray-700'>
-                        <span className='font-bold'>User Access:</span>{" "}
-                        {resolverDisplayName}
+                        <span className='font-bold'>Resident:</span>{" "}
+                        {String(event.userName || "Resident account").trim() ||
+                          "Resident account"}
+                      </p>
+                      <p className='text-xs text-gray-700'>
+                        <span className='font-bold'>Center:</span>{" "}
+                        {event.centerName || "Evacuation Center"}
+                      </p>
+                      <p className='text-xs text-gray-700'>
+                        <span className='font-bold'>Action:</span>{" "}
+                        {isDeparture
+                          ? "Departure Confirmed"
+                          : "Arrival Confirmed"}
+                      </p>
+                      <p className='text-xs text-gray-700'>
+                        <span className='font-bold'>Members Counted:</span>{" "}
+                        {memberCount}
                       </p>
                       <p className='text-xs text-gray-700'>
                         <span className='font-bold'>Timestamp:</span>{" "}
                         {this.getEmergencyEventTimeLabel(event)}
-                      </p>
-                      <p className='text-xs text-gray-700'>
-                        <span className='font-bold'>Action:</span> {actionLabel}
                       </p>
                     </div>
                   );
                 })}
               </div>
             )}
+
+            <div className='mt-4 pt-4 border-t border-gray-200'>
+              <h4 className='text-xs font-black text-[#3a4a5b] uppercase mb-2'>
+                Audit Log Snapshot
+              </h4>
+
+              {recentFeedEvents.length === 0 ? (
+                <p className='text-sm text-gray-500'>No recent activity.</p>
+              ) : (
+                <div className='space-y-2 max-h-40 overflow-y-auto pr-1'>
+                  {recentFeedEvents.map((event) => {
+                    const isGovernmentResolver =
+                      event.role === "government" ||
+                      event.accountType === "government" ||
+                      String(event.userName || "")
+                        .toLowerCase()
+                        .includes("government");
+                    const resolverDisplayName =
+                      String(event.userName || "").trim() ||
+                      (isGovernmentResolver
+                        ? "Government account"
+                        : "Resident account");
+                    const actionLabel =
+                      event.type === "sos"
+                        ? "SOS Triggered"
+                        : event.type === "announcement"
+                          ? "LGU Announcement Posted"
+                          : event.type === "resolution"
+                            ? event.resolutionNote ||
+                              `Resolved by ${resolverDisplayName}`
+                            : event.type === "evacuation-arrival"
+                              ? event.status === "departed" ||
+                                event.status === "cleared"
+                                ? "Departure Confirmed"
+                                : "Arrival Confirmed"
+                              : "Activity Logged";
+
+                    return (
+                      <div
+                        key={`audit-${event.id}`}
+                        className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2'
+                      >
+                        <p className='text-xs text-gray-700'>
+                          <span className='font-bold'>User Access:</span>{" "}
+                          {resolverDisplayName}
+                        </p>
+                        <p className='text-xs text-gray-700'>
+                          <span className='font-bold'>Timestamp:</span>{" "}
+                          {this.getEmergencyEventTimeLabel(event)}
+                        </p>
+                        <p className='text-xs text-gray-700'>
+                          <span className='font-bold'>Action:</span>{" "}
+                          {actionLabel}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </>

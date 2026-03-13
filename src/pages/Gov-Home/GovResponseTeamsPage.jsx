@@ -1,87 +1,171 @@
 import React from "react";
-
-const RESPONSE_TEAMS = [
-  {
-    id: "team-alpha",
-    name: "Team Alpha",
-  },
-  {
-    id: "team-bravo",
-    name: "Team Bravo",
-  },
-  {
-    id: "team-charlie",
-    name: "Team Charlie",
-  },
-];
+import EmergencyEventService from "../../services/EmergencyEventService";
+import GovResponseTeamsService from "../../services/GovResponseTeamsService";
 
 const STATUS_OPTIONS = ["Dispatched", "En Route", "Resolved"];
 
+function getFirestoreActionErrorMessage(error, entityLabel) {
+  const code = String(error?.code || "").toLowerCase();
+
+  if (code.includes("permission-denied")) {
+    return `Failed to save ${entityLabel}. Firestore rules are blocking this action. Add rules for government response team collections, publish them in Firebase Console, then try again.`;
+  }
+
+  return `Failed to save ${entityLabel}. Please try again.`;
+}
+
 function GovResponseTeamsPage() {
-  const [responders, setResponders] = React.useState([
-    {
-      id: "resp-1",
-      name: "Aimee Santos",
-      role: "Medic",
-      contactInfo: "0917-200-3344",
-    },
-    {
-      id: "resp-2",
-      name: "Victor Ramos",
-      role: "Rescue Lead",
-      contactInfo: "0917-455-8123",
-    },
-  ]);
+  const [teams, setTeams] = React.useState([]);
+  const [responders, setResponders] = React.useState([]);
   const [responderDraft, setResponderDraft] = React.useState({
     name: "",
     role: "",
     contactInfo: "",
   });
+  const [teamDraft, setTeamDraft] = React.useState({
+    name: "",
+    memberIds: [],
+  });
+  const [editingTeamId, setEditingTeamId] = React.useState("");
+  const [editTeamDraft, setEditTeamDraft] = React.useState({
+    name: "",
+    memberIds: [],
+  });
+  const [savingTeamId, setSavingTeamId] = React.useState("");
 
-  const [deployments, setDeployments] = React.useState([
-    {
-      id: "dep-1",
-      sosId: "SOS-2401",
-      assignedTeamId: "team-bravo",
-      status: "En Route",
-      incidentType: "Medical Assistance",
-      createdAt: "2026-02-28T08:25:00.000Z",
-      resolvedAt: null,
-    },
-    {
-      id: "dep-2",
-      sosId: "SOS-2397",
-      assignedTeamId: "team-alpha",
-      status: "Resolved",
-      incidentType: "Flood Evacuation",
-      createdAt: "2026-02-27T17:10:00.000Z",
-      resolvedAt: "2026-02-27T18:02:00.000Z",
-    },
-  ]);
+  const [deployments, setDeployments] = React.useState([]);
   const [deploymentDraft, setDeploymentDraft] = React.useState({
     sosId: "",
-    assignedTeamId: RESPONSE_TEAMS[0].id,
+    assignedTeamId: "",
     incidentType: "SOS Alert",
   });
+  const [activeSosEvents, setActiveSosEvents] = React.useState([]);
 
-  const [teamNotes, setTeamNotes] = React.useState([
-    {
-      id: "note-1",
-      deploymentId: "dep-1",
-      note: "Ambulance ETA 6 minutes.",
-      timestamp: "2026-03-01T02:48:00.000Z",
-    },
-  ]);
+  const [teamNotes, setTeamNotes] = React.useState([]);
   const [noteDraft, setNoteDraft] = React.useState({
     deploymentId: "",
     note: "",
   });
 
-  const getTeamName = React.useCallback((teamId) => {
-    return (
-      RESPONSE_TEAMS.find((team) => team.id === teamId)?.name || "Unknown Team"
-    );
+  React.useEffect(() => {
+    const unsubscribeResponders =
+      GovResponseTeamsService.subscribeToResponders(setResponders);
+    const unsubscribeTeams = GovResponseTeamsService.subscribeToTeams(setTeams);
+    const unsubscribeDeployments =
+      GovResponseTeamsService.subscribeToDeployments(setDeployments);
+    const unsubscribeNotes =
+      GovResponseTeamsService.subscribeToTeamNotes(setTeamNotes);
+
+    return () => {
+      unsubscribeResponders();
+      unsubscribeTeams();
+      unsubscribeDeployments();
+      unsubscribeNotes();
+    };
   }, []);
+
+  React.useEffect(() => {
+    const unsubscribeEmergencyEvents =
+      EmergencyEventService.subscribeToRecentEvents((events) => {
+        const resolvedSourceEventIds = new Set(
+          events
+            .filter(
+              (event) => event.type === "resolution" && event.sourceEventId,
+            )
+            .map((event) => event.sourceEventId),
+        );
+
+        const activeSos = events.filter(
+          (event) =>
+            event.type === "sos" &&
+            event.status !== "resolved" &&
+            !resolvedSourceEventIds.has(event.id),
+        );
+
+        const dedupedActiveSos = [];
+        const seenIncidentKeys = new Set();
+
+        activeSos.forEach((event) => {
+          const incidentKey = String(
+            event.userId || event.userName || event.id,
+          );
+          if (seenIncidentKeys.has(incidentKey)) {
+            return;
+          }
+
+          seenIncidentKeys.add(incidentKey);
+          dedupedActiveSos.push(event);
+        });
+
+        setActiveSosEvents(dedupedActiveSos);
+      }, 100);
+
+    return () => {
+      unsubscribeEmergencyEvents();
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (teams.length === 0) {
+      setDeploymentDraft((prev) => ({
+        ...prev,
+        assignedTeamId: "",
+      }));
+      return;
+    }
+
+    setDeploymentDraft((prev) => {
+      if (prev.assignedTeamId) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        assignedTeamId: teams[0].id,
+      };
+    });
+  }, [teams]);
+
+  React.useEffect(() => {
+    if (activeSosEvents.length === 0) {
+      setDeploymentDraft((prev) => ({
+        ...prev,
+        sosId: "",
+      }));
+      return;
+    }
+
+    setDeploymentDraft((prev) => {
+      const stillExists = activeSosEvents.some(
+        (event) => event.id === prev.sosId,
+      );
+      if (stillExists) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        sosId: activeSosEvents[0].id,
+      };
+    });
+  }, [activeSosEvents]);
+
+  const getTeamName = React.useCallback(
+    (teamId) => {
+      return teams.find((team) => team.id === teamId)?.name || "Unknown Team";
+    },
+    [teams],
+  );
+
+  const getResponderName = React.useCallback(
+    (responderId) => {
+      return (
+        responders.find((responder) => responder.id === responderId)?.name ||
+        "Unknown responder"
+      );
+    },
+    [responders],
+  );
 
   const formatDateTime = React.useCallback((rawDate) => {
     if (!rawDate) return "—";
@@ -97,6 +181,19 @@ function GovResponseTeamsPage() {
     });
   }, []);
 
+  const getActiveSosLabel = React.useCallback(
+    (event) => {
+      const disasterType = String(
+        event?.disasterTypeLabel || event?.disasterType || "SOS Alert",
+      ).trim();
+      const userName = String(event?.userName || "Resident").trim();
+      const createdAt = formatDateTime(event?.createdAt);
+
+      return `${userName} • ${disasterType} • ${createdAt}`;
+    },
+    [formatDateTime],
+  );
+
   const activeDeployments = deployments.filter(
     (deployment) => deployment.status !== "Resolved",
   );
@@ -108,7 +205,7 @@ function GovResponseTeamsPage() {
         new Date(a.resolvedAt || a.createdAt).getTime(),
     );
 
-  const handleAddResponder = () => {
+  const handleAddResponder = async () => {
     if (
       !responderDraft.name.trim() ||
       !responderDraft.role.trim() ||
@@ -117,84 +214,149 @@ function GovResponseTeamsPage() {
       return;
     }
 
-    setResponders((prev) => [
-      {
-        id: `resp-${Date.now()}`,
+    try {
+      await GovResponseTeamsService.createResponder({
         name: responderDraft.name.trim(),
         role: responderDraft.role.trim(),
         contactInfo: responderDraft.contactInfo.trim(),
-      },
-      ...prev,
-    ]);
+      });
 
-    setResponderDraft({ name: "", role: "", contactInfo: "" });
+      setResponderDraft({ name: "", role: "", contactInfo: "" });
+    } catch (error) {
+      console.error("Failed to save responder:", error);
+      alert(getFirestoreActionErrorMessage(error, "responder"));
+    }
   };
 
-  const handleDeployToSos = () => {
+  const handleToggleTeamMember = (responderId) => {
+    setTeamDraft((prev) => {
+      const alreadyIncluded = prev.memberIds.includes(responderId);
+      return {
+        ...prev,
+        memberIds: alreadyIncluded
+          ? prev.memberIds.filter((id) => id !== responderId)
+          : [...prev.memberIds, responderId],
+      };
+    });
+  };
+
+  const handleCreateTeam = async () => {
+    if (!teamDraft.name.trim() || teamDraft.memberIds.length === 0) {
+      return;
+    }
+
+    try {
+      await GovResponseTeamsService.createTeam({
+        name: teamDraft.name.trim(),
+        memberIds: [...teamDraft.memberIds],
+      });
+
+      setTeamDraft({ name: "", memberIds: [] });
+    } catch (error) {
+      console.error("Failed to create team:", error);
+      alert(getFirestoreActionErrorMessage(error, "team"));
+    }
+  };
+
+  const handleStartEditTeam = (team) => {
+    setEditingTeamId(team.id);
+    setEditTeamDraft({
+      name: String(team.name || ""),
+      memberIds: Array.isArray(team.memberIds) ? [...team.memberIds] : [],
+    });
+  };
+
+  const handleCancelEditTeam = () => {
+    setEditingTeamId("");
+    setEditTeamDraft({ name: "", memberIds: [] });
+  };
+
+  const handleToggleEditTeamMember = (responderId) => {
+    setEditTeamDraft((prev) => {
+      const alreadyIncluded = prev.memberIds.includes(responderId);
+      return {
+        ...prev,
+        memberIds: alreadyIncluded
+          ? prev.memberIds.filter((id) => id !== responderId)
+          : [...prev.memberIds, responderId],
+      };
+    });
+  };
+
+  const handleSaveTeamChanges = async () => {
+    if (!editingTeamId) return;
+
+    if (!editTeamDraft.name.trim() || editTeamDraft.memberIds.length === 0) {
+      return;
+    }
+
+    try {
+      setSavingTeamId(editingTeamId);
+      await GovResponseTeamsService.updateTeam(editingTeamId, {
+        name: editTeamDraft.name.trim(),
+        memberIds: [...editTeamDraft.memberIds],
+      });
+      handleCancelEditTeam();
+    } catch (error) {
+      console.error("Failed to update team:", error);
+      alert(getFirestoreActionErrorMessage(error, "team"));
+    } finally {
+      setSavingTeamId("");
+    }
+  };
+
+  const handleDeployToSos = async () => {
     if (!deploymentDraft.sosId.trim() || !deploymentDraft.assignedTeamId) {
       return;
     }
 
-    setDeployments((prev) => [
-      {
-        id: `dep-${Date.now()}`,
+    try {
+      await GovResponseTeamsService.createDeployment({
         sosId: deploymentDraft.sosId.trim().toUpperCase(),
         assignedTeamId: deploymentDraft.assignedTeamId,
         status: "Dispatched",
         incidentType: deploymentDraft.incidentType.trim() || "SOS Alert",
-        createdAt: new Date().toISOString(),
-        resolvedAt: null,
-      },
-      ...prev,
-    ]);
+      });
 
-    setDeploymentDraft((prev) => ({
-      ...prev,
-      sosId: "",
-      incidentType: "SOS Alert",
-    }));
+      setDeploymentDraft((prev) => ({
+        ...prev,
+        sosId: "",
+        incidentType: "SOS Alert",
+      }));
+    } catch (error) {
+      console.error("Failed to create deployment:", error);
+      alert(getFirestoreActionErrorMessage(error, "deployment"));
+    }
   };
 
-  const handleStatusUpdate = (deploymentId, nextStatus) => {
-    setDeployments((prev) =>
-      prev.map((deployment) => {
-        if (deployment.id !== deploymentId) {
-          return deployment;
-        }
-
-        if (nextStatus === "Resolved") {
-          return {
-            ...deployment,
-            status: nextStatus,
-            resolvedAt: new Date().toISOString(),
-          };
-        }
-
-        return {
-          ...deployment,
-          status: nextStatus,
-          resolvedAt: null,
-        };
-      }),
-    );
+  const handleStatusUpdate = async (deploymentId, nextStatus) => {
+    try {
+      await GovResponseTeamsService.updateDeploymentStatus(
+        deploymentId,
+        nextStatus,
+      );
+    } catch (error) {
+      console.error("Failed to update deployment status:", error);
+      alert(getFirestoreActionErrorMessage(error, "deployment status"));
+    }
   };
 
-  const handleAddTeamNote = () => {
+  const handleAddTeamNote = async () => {
     if (!noteDraft.deploymentId || !noteDraft.note.trim()) {
       return;
     }
 
-    setTeamNotes((prev) => [
-      {
-        id: `note-${Date.now()}`,
+    try {
+      await GovResponseTeamsService.createTeamNote({
         deploymentId: noteDraft.deploymentId,
         note: noteDraft.note.trim(),
-        timestamp: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+      });
 
-    setNoteDraft({ deploymentId: "", note: "" });
+      setNoteDraft({ deploymentId: "", note: "" });
+    } catch (error) {
+      console.error("Failed to save team note:", error);
+      alert(getFirestoreActionErrorMessage(error, "team note"));
+    }
   };
 
   return (
@@ -259,29 +421,217 @@ function GovResponseTeamsPage() {
           </div>
 
           <div className='space-y-2 max-h-60 overflow-y-auto pr-1'>
-            {responders.map((responder) => (
-              <div
-                key={responder.id}
-                className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2'
-              >
-                <p className='text-sm font-bold text-[#3a4a5b]'>
-                  {responder.name}
-                </p>
-                <p className='text-xs text-gray-600'>{responder.role}</p>
-                <p className='text-xs text-gray-500'>{responder.contactInfo}</p>
-              </div>
-            ))}
+            {responders.length === 0 ? (
+              <p className='text-sm text-gray-500'>
+                No responders registered yet.
+              </p>
+            ) : (
+              responders.map((responder) => (
+                <div
+                  key={responder.id}
+                  className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2'
+                >
+                  <p className='text-sm font-bold text-[#3a4a5b]'>
+                    {responder.name}
+                  </p>
+                  <p className='text-xs text-gray-600'>{responder.role}</p>
+                  <p className='text-xs text-gray-500'>
+                    {responder.contactInfo}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
         <div className='xl:col-span-6 bg-white rounded-lg shadow-sm p-6 border border-gray-200'>
           <h4 className='text-sm font-black text-[#3a4a5b] uppercase mb-4'>
+            Create Teams
+          </h4>
+
+          <div className='space-y-3'>
+            <input
+              type='text'
+              value={teamDraft.name}
+              onChange={(event) =>
+                setTeamDraft((prev) => ({
+                  ...prev,
+                  name: event.target.value,
+                }))
+              }
+              placeholder='Team name'
+              className='w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-900 placeholder:text-slate-500'
+            />
+
+            <div className='rounded-lg border border-gray-200 bg-gray-50 p-3 max-h-48 overflow-y-auto'>
+              {responders.length === 0 ? (
+                <p className='text-sm text-gray-500'>
+                  Register responders first before creating a team.
+                </p>
+              ) : (
+                <div className='space-y-2'>
+                  {responders.map((responder) => {
+                    const isSelected = teamDraft.memberIds.includes(
+                      responder.id,
+                    );
+
+                    return (
+                      <label
+                        key={responder.id}
+                        className='flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 cursor-pointer'
+                      >
+                        <input
+                          type='checkbox'
+                          checked={isSelected}
+                          onChange={() => handleToggleTeamMember(responder.id)}
+                          className='peer sr-only'
+                        />
+                        <span className='mt-0.5 h-4 w-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[10px] font-black text-transparent peer-checked:bg-blue-600 peer-checked:border-blue-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-blue-300'>
+                          ✓
+                        </span>
+                        <span className='min-w-0'>
+                          <span className='block text-sm font-bold text-[#3a4a5b]'>
+                            {responder.name}
+                          </span>
+                          <span className='block text-xs text-gray-600'>
+                            {responder.role} • {responder.contactInfo}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <button
+              type='button'
+              onClick={handleCreateTeam}
+              disabled={responders.length === 0}
+              className='w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+            >
+              Create Team
+            </button>
+          </div>
+
+          <div className='mt-4 space-y-2 max-h-52 overflow-y-auto pr-1'>
+            {teams.length === 0 ? (
+              <p className='text-sm text-gray-500'>No teams created yet.</p>
+            ) : (
+              teams.map((team) => (
+                <div
+                  key={team.id}
+                  className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2'
+                >
+                  {editingTeamId === team.id ? (
+                    <div className='space-y-2'>
+                      <input
+                        type='text'
+                        value={editTeamDraft.name}
+                        onChange={(event) =>
+                          setEditTeamDraft((prev) => ({
+                            ...prev,
+                            name: event.target.value,
+                          }))
+                        }
+                        placeholder='Team name'
+                        className='w-full px-2 py-1.5 border border-gray-300 rounded text-sm bg-white text-slate-900'
+                      />
+                      <div className='rounded border border-gray-200 bg-white p-2 max-h-32 overflow-y-auto'>
+                        {responders.length === 0 ? (
+                          <p className='text-xs text-gray-500'>
+                            No responders available.
+                          </p>
+                        ) : (
+                          <div className='space-y-1'>
+                            {responders.map((responder) => {
+                              const isSelected =
+                                editTeamDraft.memberIds.includes(responder.id);
+
+                              return (
+                                <label
+                                  key={`${team.id}-${responder.id}`}
+                                  className='flex items-center gap-2 text-xs text-slate-700'
+                                >
+                                  <input
+                                    type='checkbox'
+                                    checked={isSelected}
+                                    onChange={() =>
+                                      handleToggleEditTeamMember(responder.id)
+                                    }
+                                    className='peer sr-only'
+                                  />
+                                  <span className='h-4 w-4 rounded border border-slate-300 bg-white flex items-center justify-center text-[10px] font-black text-transparent peer-checked:bg-blue-600 peer-checked:border-blue-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-blue-300'>
+                                    ✓
+                                  </span>
+                                  <span>
+                                    {responder.name} • {responder.role}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div className='flex gap-2'>
+                        <button
+                          type='button'
+                          onClick={handleSaveTeamChanges}
+                          disabled={savingTeamId === team.id}
+                          className='px-3 py-1.5 rounded bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                        >
+                          {savingTeamId === team.id ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          type='button'
+                          onClick={handleCancelEditTeam}
+                          disabled={savingTeamId === team.id}
+                          className='px-3 py-1.5 rounded bg-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed'
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className='text-sm font-bold text-[#3a4a5b]'>
+                        {team.name}
+                      </p>
+                      <p className='text-xs text-gray-500 mt-1'>
+                        {team.memberIds.length} member
+                        {team.memberIds.length === 1 ? "" : "s"}
+                      </p>
+                      <p className='text-xs text-gray-600 mt-1'>
+                        {team.memberIds
+                          .map((memberId) => getResponderName(memberId))
+                          .join(", ")}
+                      </p>
+                      <div className='mt-2'>
+                        <button
+                          type='button'
+                          onClick={() => handleStartEditTeam(team)}
+                          className='px-3 py-1.5 rounded bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:border-blue-200 hover:text-blue-700'
+                        >
+                          Edit Team
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className='grid grid-cols-1 xl:grid-cols-12 gap-6'>
+        <div className='xl:col-span-12 bg-white rounded-lg shadow-sm p-6 border border-gray-200'>
+          <h4 className='text-sm font-black text-[#3a4a5b] uppercase mb-4'>
             Assign to SOS
           </h4>
 
           <div className='grid grid-cols-1 md:grid-cols-12 gap-2 mb-4'>
-            <input
-              type='text'
+            <select
               value={deploymentDraft.sosId}
               onChange={(event) =>
                 setDeploymentDraft((prev) => ({
@@ -289,9 +639,20 @@ function GovResponseTeamsPage() {
                   sosId: event.target.value,
                 }))
               }
-              placeholder='SOS ID'
-              className='md:col-span-4 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-900 placeholder:text-slate-500'
-            />
+              disabled={activeSosEvents.length === 0}
+              className='md:col-span-4 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-900'
+            >
+              <option value=''>
+                {activeSosEvents.length === 0
+                  ? "No active SOS triggers"
+                  : "Select active SOS"}
+              </option>
+              {activeSosEvents.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {getActiveSosLabel(event)}
+                </option>
+              ))}
+            </select>
             <select
               value={deploymentDraft.assignedTeamId}
               onChange={(event) =>
@@ -300,9 +661,15 @@ function GovResponseTeamsPage() {
                   assignedTeamId: event.target.value,
                 }))
               }
+              disabled={teams.length === 0}
               className='md:col-span-4 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-slate-900'
             >
-              {RESPONSE_TEAMS.map((team) => (
+              <option value=''>
+                {teams.length === 0
+                  ? "No teams available"
+                  : "Select response team"}
+              </option>
+              {teams.map((team) => (
                 <option key={team.id} value={team.id}>
                   {team.name}
                 </option>
@@ -323,6 +690,7 @@ function GovResponseTeamsPage() {
             <button
               type='button'
               onClick={handleDeployToSos}
+              disabled={teams.length === 0 || activeSosEvents.length === 0}
               className='md:col-span-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700'
             >
               Deploy
@@ -330,20 +698,25 @@ function GovResponseTeamsPage() {
           </div>
 
           <div className='space-y-2 max-h-60 overflow-y-auto pr-1'>
-            {deployments.slice(0, 6).map((deployment) => (
-              <div
-                key={deployment.id}
-                className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2'
-              >
-                <p className='text-sm font-bold text-[#3a4a5b]'>
-                  {deployment.sosId} • {getTeamName(deployment.assignedTeamId)}
-                </p>
-                <p className='text-xs text-gray-500'>
-                  {deployment.incidentType} •{" "}
-                  {formatDateTime(deployment.createdAt)}
-                </p>
-              </div>
-            ))}
+            {deployments.length === 0 ? (
+              <p className='text-sm text-gray-500'>No team deployments yet.</p>
+            ) : (
+              deployments.slice(0, 6).map((deployment) => (
+                <div
+                  key={deployment.id}
+                  className='rounded-lg border border-gray-200 bg-gray-50 px-3 py-2'
+                >
+                  <p className='text-sm font-bold text-[#3a4a5b]'>
+                    {deployment.sosId} •{" "}
+                    {getTeamName(deployment.assignedTeamId)}
+                  </p>
+                  <p className='text-xs text-gray-500'>
+                    {deployment.incidentType} •{" "}
+                    {formatDateTime(deployment.createdAt)}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

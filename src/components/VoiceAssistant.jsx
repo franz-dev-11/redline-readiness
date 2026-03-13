@@ -1051,10 +1051,7 @@ function buildCommandsForView(view) {
     ...activeGlobalCommands,
   ];
 
-  return [
-    ...(viewCommands[view] || []),
-    ...activeGlobalCommands,
-  ];
+  return [...(viewCommands[view] || []), ...activeGlobalCommands];
 }
 
 // ---------------------------------------------------------------------------
@@ -1072,7 +1069,9 @@ const VoiceAssistant = () => {
   const [isSupported] = useState(() => VoiceCommandService.isSupported());
   const [showDebugPanel] = useState(() => {
     if (typeof window === "undefined") return false;
-    return new URLSearchParams(window.location.search).get("voiceDebug") === "1";
+    return (
+      new URLSearchParams(window.location.search).get("voiceDebug") === "1"
+    );
   });
   const transcriptTimerRef = useRef(null);
   const commandFeedbackTimerRef = useRef(null);
@@ -1315,12 +1314,8 @@ const VoiceAssistant = () => {
           <div>Listening: {isListening ? "yes" : "no"}</div>
           <div>Current view: {currentView}</div>
           <div>Last event: {lastStatusType}</div>
-          <div>
-            Last detail: {lastStatusDetail || "(none yet)"}
-          </div>
-          <div>
-            Live transcript: {transcript || "(none)"}
-          </div>
+          <div>Last detail: {lastStatusDetail || "(none yet)"}</div>
+          <div>Live transcript: {transcript || "(none)"}</div>
         </div>
       )}
 

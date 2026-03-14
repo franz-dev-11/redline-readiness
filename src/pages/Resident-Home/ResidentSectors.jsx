@@ -244,9 +244,9 @@ class ResidentSectors extends React.Component {
     const sectorAnnouncements = this.getSectorAnnouncements();
 
     return (
-      <section className='space-y-4'>
+      <section className='space-y-4' aria-labelledby='sectors-page-heading'>
         <div className='bg-white border border-slate-200 rounded-2xl p-6 shadow-sm'>
-          <h2 className='text-xl font-black text-slate-800 uppercase tracking-tight'>
+          <h2 id='sectors-page-heading' className='text-xl font-black text-slate-800 uppercase tracking-tight'>
             Disability Category View
           </h2>
           <p className='text-sm text-slate-600 mt-1'>

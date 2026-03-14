@@ -189,9 +189,9 @@ class ResidentResources extends React.Component {
       .join(" ");
 
     return (
-      <section className={wrapperClass}>
+      <section className={wrapperClass} aria-labelledby='resources-page-heading'>
         <div className='bg-white border border-slate-200 rounded-2xl p-6 shadow-sm'>
-          <h2 className='text-xl font-black text-slate-800 uppercase tracking-tight'>
+          <h2 id='resources-page-heading' className='text-xl font-black text-slate-800 uppercase tracking-tight'>
             Emergency Hotlines
           </h2>
           <p className='text-sm text-slate-600 mt-1'>

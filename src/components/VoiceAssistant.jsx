@@ -44,6 +44,23 @@ const PAGE_DESCRIPTIONS = {
     "Administrator dashboard. You have access to all system administration features.",
 };
 
+// Tab-specific descriptions spoken when the user says "read page" inside the
+// resident dashboard.  Keyed by the activeTab value used in ResidentDashboard.
+const HOME_TAB_DESCRIPTIONS = {
+  dashboard:
+    "You are on the resident dashboard. This shows your evacuation center status, map, and SOS controls. Say alerts, evacuation plan, resources, contacts, or sectors to navigate to other tabs.",
+  alerts:
+    "You are on the Alerts page. Here you can trigger an SOS emergency alert, view LGU announcements, evacuation center updates, and your alert history.",
+  "evac-plan":
+    "You are on the Evacuation Plan page. Select a disaster type to view before, during, and after guidance. You can also view your assigned evacuation centers, add family members, and manage your safety checklist.",
+  resources:
+    "You are on the Resources page. Find emergency hotlines you can call directly, your saved medical information, accessibility settings, and disaster guide downloads.",
+  contacts:
+    "You are on the Contacts page. Emergency contact numbers are listed here, including the Municipal DRRMO, Local Rescue Team, and Municipal Hospital. Tap any number to call directly.",
+  sectors:
+    "You are on the Sectors and Disabilities page. Filter by disability category to find relevant accessibility support services and view sector announcements.",
+};
+
 function buildHelpSpeech(commands) {
   const nonNavigationLabels = new Set([
     "Read page description",
@@ -77,7 +94,8 @@ function buildHelpSpeech(commands) {
 // ---------------------------------------------------------------------------
 // Build the command list for a given view
 // ---------------------------------------------------------------------------
-function buildCommandsForView(view) {
+function buildCommandsForView(view, options = {}) {
+  const { activeHomeTab = "dashboard" } = options;
   const speak = (text) => VoiceCommandService.speak(text, true);
   let getCurrentCommandsForHelp = () => [];
 
@@ -116,21 +134,33 @@ function buildCommandsForView(view) {
       phrase: "read page",
       label: "Read page description",
       action: () => {
-        speak(PAGE_DESCRIPTIONS[view] || "You are on the current page.");
+        const desc =
+          view === "home"
+            ? HOME_TAB_DESCRIPTIONS[activeHomeTab] || PAGE_DESCRIPTIONS[view]
+            : PAGE_DESCRIPTIONS[view];
+        speak(desc || "You are on the current page.");
       },
     },
     {
       phrase: "describe page",
       label: "Describe current page",
       action: () => {
-        speak(PAGE_DESCRIPTIONS[view] || "You are on the current page.");
+        const desc =
+          view === "home"
+            ? HOME_TAB_DESCRIPTIONS[activeHomeTab] || PAGE_DESCRIPTIONS[view]
+            : PAGE_DESCRIPTIONS[view];
+        speak(desc || "You are on the current page.");
       },
     },
     {
       phrase: "what page am i on",
       label: "Describe current page",
       action: () => {
-        speak(PAGE_DESCRIPTIONS[view] || "You are on the current page.");
+        const desc =
+          view === "home"
+            ? HOME_TAB_DESCRIPTIONS[activeHomeTab] || PAGE_DESCRIPTIONS[view]
+            : PAGE_DESCRIPTIONS[view];
+        speak(desc || "You are on the current page.");
       },
     },
     {
@@ -1062,6 +1092,7 @@ const VoiceAssistant = () => {
   const [transcript, setTranscript] = useState("");
   const [showHelp, setShowHelp] = useState(false);
   const [currentView, setCurrentView] = useState(ViewManager.getCurrentView());
+  const [activeHomeTab, setActiveHomeTab] = useState("dashboard");
   const [commandMatched, setCommandMatched] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
   const [lastStatusType, setLastStatusType] = useState("idle");
@@ -1093,11 +1124,18 @@ const VoiceAssistant = () => {
       });
   }, [isSupported]);
 
-  // Re-register commands whenever the view changes
+  // Track active tab inside the resident dashboard
   useEffect(() => {
-    const commands = buildCommandsForView(currentView);
+    const handler = (e) => setActiveHomeTab(e.detail?.tab || "dashboard");
+    window.addEventListener("voiceActiveTabChange", handler);
+    return () => window.removeEventListener("voiceActiveTabChange", handler);
+  }, []);
+
+  // Re-register commands whenever the view or active home tab changes
+  useEffect(() => {
+    const commands = buildCommandsForView(currentView, { activeHomeTab });
     VoiceCommandService.setCommands(commands);
-  }, [currentView]);
+  }, [currentView, activeHomeTab]);
 
   // Subscribe to ViewManager view changes
   useEffect(() => {
@@ -1165,16 +1203,14 @@ const VoiceAssistant = () => {
     } else {
       setMicDenied(false);
       VoiceCommandService.start();
-      VoiceCommandService.speak(
-        "Voice assistant activated. Say help for a list of available commands.",
-      );
+      VoiceCommandService.speak("Listening. Say help for a list of available commands.", false, false);
     }
   }, [isListening]);
 
   // Unique command labels for help panel display
   const displayCommands = Array.from(
     new Map(
-      buildCommandsForView(currentView).map((c) => [c.label, c]),
+      buildCommandsForView(currentView, { activeHomeTab }).map((c) => [c.label, c]),
     ).values(),
   );
 

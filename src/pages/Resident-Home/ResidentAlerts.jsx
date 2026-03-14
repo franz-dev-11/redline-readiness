@@ -191,7 +191,10 @@ class ResidentAlerts extends React.Component {
             const rawCapacity =
               data.capacity ?? data.maxCapacity ?? data.totalCapacity;
             const rawHeadcount =
-              data.headcount ?? data.current ?? data.occupied ?? data.currentCount;
+              data.headcount ??
+              data.current ??
+              data.occupied ??
+              data.currentCount;
             const rawAvailableSlots =
               data.availableSlots ?? data.remainingSlots ?? data.slotsAvailable;
 
@@ -199,7 +202,9 @@ class ResidentAlerts extends React.Component {
             const headcount = Number(rawHeadcount);
             const availableSlots = Number(rawAvailableSlots);
             const normalizedCapacity =
-              Number.isFinite(capacity) && capacity >= 0 ? Math.floor(capacity) : 0;
+              Number.isFinite(capacity) && capacity >= 0
+                ? Math.floor(capacity)
+                : 0;
             const normalizedHeadcount =
               Number.isFinite(headcount) && headcount >= 0
                 ? Math.floor(headcount)
@@ -229,8 +234,12 @@ class ResidentAlerts extends React.Component {
             };
           })
           .sort((a, b) => {
-            const aTime = a.updatedAt?.toDate ? a.updatedAt.toDate().getTime() : 0;
-            const bTime = b.updatedAt?.toDate ? b.updatedAt.toDate().getTime() : 0;
+            const aTime = a.updatedAt?.toDate
+              ? a.updatedAt.toDate().getTime()
+              : 0;
+            const bTime = b.updatedAt?.toDate
+              ? b.updatedAt.toDate().getTime()
+              : 0;
             return bTime - aTime;
           });
 
@@ -663,9 +672,9 @@ class ResidentAlerts extends React.Component {
     );
 
     return (
-      <section className='space-y-4'>
+      <section className='space-y-4' aria-labelledby='alerts-page-heading'>
         <div className='bg-white border border-slate-200 rounded-2xl p-6 shadow-sm'>
-          <h2 className='text-xl font-black text-slate-800 uppercase tracking-tight'>
+          <h2 id='alerts-page-heading' className='text-xl font-black text-slate-800 uppercase tracking-tight'>
             SOS Alerts
           </h2>
           <p className='text-sm text-slate-600 mt-1'>

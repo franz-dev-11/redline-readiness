@@ -365,6 +365,7 @@ class ResidentDashboard extends React.Component {
       ],
       notificationWidgetCollapsed: true,
       disasterAlertDismissedId: null,
+      tabAnnouncement: "",
       // profileQrCode removed
     };
 
@@ -850,8 +851,26 @@ class ResidentDashboard extends React.Component {
   }
 
   handleTabChange(tabKey) {
-    this.setState({ activeTab: tabKey });
+    const tabNames = {
+      dashboard: "Dashboard",
+      alerts: "Alerts",
+      "evac-plan": "Evacuation Plan",
+      resources: "Resources",
+      contacts: "Contacts",
+      sectors: "Sectors and Disabilities",
+    };
+    this.setState({
+      activeTab: tabKey,
+      tabAnnouncement: `Now viewing: ${tabNames[tabKey] || tabKey}`,
+    });
+    window.dispatchEvent(
+      new CustomEvent("voiceActiveTabChange", { detail: { tab: tabKey } }),
+    );
     window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => {
+      const el = document.getElementById("tab-content-region");
+      if (el) el.focus();
+    }, 150);
   }
 
   renderActiveTabPage() {
@@ -2053,6 +2072,7 @@ class ResidentDashboard extends React.Component {
       clearingArrival,
       notificationWidgetCollapsed,
       disasterAlertDismissedId,
+      tabAnnouncement,
     } = this.state;
     const centers = evacuationCenters;
     const selectedCenter =
@@ -2118,6 +2138,9 @@ class ResidentDashboard extends React.Component {
         >
           Skip to main content
         </a>
+        <div role='status' aria-live='polite' aria-atomic='true' className='sr-only'>
+          {tabAnnouncement}
+        </div>
         <Header
           sticky={true}
           centerContent={
@@ -2347,7 +2370,9 @@ class ResidentDashboard extends React.Component {
               );
             })()}
             {activeTab !== "dashboard" ? (
-              this.renderActiveTabPage()
+              <div id='tab-content-region' tabIndex={-1}>
+                {this.renderActiveTabPage()}
+              </div>
             ) : (
               <>
                 <section className='bg-white border border-gray-200 rounded-lg p-5 shadow-sm scroll-mt-44'>
@@ -2908,7 +2933,11 @@ class ResidentDashboard extends React.Component {
                         <button
                           className='relative focus:outline-none'
                           onClick={this.toggleNotificationWidgetCollapsed}
-                          aria-label={notificationWidgetCollapsed ? `Show notifications${notificationItems.length > 0 ? `, ${notificationItems.length} unread` : ''}` : 'Hide notifications'}
+                          aria-label={
+                            notificationWidgetCollapsed
+                              ? `Show notifications${notificationItems.length > 0 ? `, ${notificationItems.length} unread` : ""}`
+                              : "Hide notifications"
+                          }
                           aria-expanded={!notificationWidgetCollapsed}
                           title={
                             notificationWidgetCollapsed

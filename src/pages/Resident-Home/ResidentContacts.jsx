@@ -1,10 +1,14 @@
 import React from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPhoneVolume, faHospital, faShieldHeart } from "@fortawesome/free-solid-svg-icons";
+import {
+  faPhoneVolume,
+  faHospital,
+  faShieldHeart,
+} from "@fortawesome/free-solid-svg-icons";
 
 class ResidentContacts extends React.Component {
   renderContact(label, number, icon) {
-    const dialNumber = number.replace(/[^+\d]/g, '');
+    const dialNumber = number.replace(/[^+\d]/g, "");
     return (
       <li className='border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3'>
         <div className='flex items-center gap-3'>
@@ -29,8 +33,8 @@ class ResidentContacts extends React.Component {
 
   render() {
     return (
-      <section className='bg-white border border-slate-200 rounded-2xl p-6 shadow-sm'>
-        <h2 className='text-xl font-black text-slate-800 uppercase tracking-tight'>
+      <section className='bg-white border border-slate-200 rounded-2xl p-6 shadow-sm' aria-labelledby='contacts-page-heading'>
+        <h2 id='contacts-page-heading' className='text-xl font-black text-slate-800 uppercase tracking-tight'>
           Contacts
         </h2>
         <p className='text-sm text-slate-600 mt-1'>
@@ -38,9 +42,21 @@ class ResidentContacts extends React.Component {
         </p>
 
         <ul className='mt-5 space-y-3 list-none p-0'>
-          {this.renderContact("Municipal DRRMO", "+63 44 812 3400", faShieldHeart)}
-          {this.renderContact("Local Rescue Team", "+63 44 811 2299", faPhoneVolume)}
-          {this.renderContact("Municipal Hospital", "+63 44 812 1188", faHospital)}
+          {this.renderContact(
+            "Municipal DRRMO",
+            "+63 44 812 3400",
+            faShieldHeart,
+          )}
+          {this.renderContact(
+            "Local Rescue Team",
+            "+63 44 811 2299",
+            faPhoneVolume,
+          )}
+          {this.renderContact(
+            "Municipal Hospital",
+            "+63 44 812 1188",
+            faHospital,
+          )}
         </ul>
       </section>
     );

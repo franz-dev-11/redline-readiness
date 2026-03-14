@@ -430,7 +430,7 @@ class ResidentEvacPlan extends React.Component {
     const completedCount = checklistItems.filter((item) => item.done).length;
 
     return (
-      <section className='space-y-4'>
+      <section className='space-y-4' aria-labelledby='evac-page-heading'>
         <div className='bg-white border border-slate-200 rounded-2xl p-6 shadow-sm'>
           <div className='mb-3 text-xs font-black uppercase tracking-wide text-slate-500 flex items-center justify-between'>
             <span>Plan Sync</span>
@@ -449,7 +449,7 @@ class ResidentEvacPlan extends React.Component {
             </span>
           </div>
 
-          <h2 className='text-xl font-black text-slate-800 uppercase tracking-tight'>
+          <h2 id='evac-page-heading' className='text-xl font-black text-slate-800 uppercase tracking-tight'>
             Disaster Type Selection
           </h2>
           <p className='text-sm text-slate-600 mt-1'>

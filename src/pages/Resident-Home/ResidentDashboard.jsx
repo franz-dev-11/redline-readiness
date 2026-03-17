@@ -740,8 +740,18 @@ class ResidentDashboard extends React.Component {
         );
         const data = await response.json();
         if (data.length > 0) {
-          const { lat, lon } = data[0];
-          this.setState({ mapCenter: [parseFloat(lat), parseFloat(lon)] });
+            const { lat, lon } = data[0];
+            const latitude = parseFloat(lat);
+            const longitude = parseFloat(lon);
+            // Validate latitude and longitude ranges
+            if (
+              latitude >= -90 && latitude <= 90 &&
+              longitude >= -180 && longitude <= 180
+            ) {
+              this.setState({ mapCenter: [longitude, latitude] }); // MapLibre expects [lng, lat]
+            } else {
+              alert("Invalid location coordinates returned. Please try another search.");
+            }
         } else {
           alert("Location not found.");
         }

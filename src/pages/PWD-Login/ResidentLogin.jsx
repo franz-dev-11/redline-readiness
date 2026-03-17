@@ -79,6 +79,7 @@ class ResidentLogin extends React.Component {
   async handleLogin(e) {
     e.preventDefault();
     const { email, password } = this.state;
+    console.log("Password value:", password);
     this.setState({ loading: true, error: "" });
     const connectionTimeout = setTimeout(() => {
       this.setState({

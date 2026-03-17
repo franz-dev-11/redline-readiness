@@ -99,6 +99,7 @@ class GovernmentLogin extends React.Component {
 
     try {
       const { agencyId, password } = this.state;
+      console.log("Password value:", password);
 
       // Login with AuthService
       const user = await AuthService.login(agencyId, password);

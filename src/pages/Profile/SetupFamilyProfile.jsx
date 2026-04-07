@@ -1,6 +1,7 @@
 import React from "react";
 import ResidentDashboardHeader from "../../components/ResidentDashboardHeader";
 import AuthService from "../../services/AuthService";
+import ViewManager from "../../services/ViewManager";
 
 class StepPill extends React.Component {
   render() {
@@ -93,6 +94,14 @@ class SetupFamilyProfile extends React.Component {
       }
 
       const userData = await AuthService.getUserData(user.uid);
+
+      // Ensure family accounts have a profile QR code
+      if (!userData?.profileQrCode) {
+        const generatedCode = `RR-${user.uid.slice(0, 10).toUpperCase()}`;
+        await AuthService.updateUserProfile(user.uid, {
+          profileQrCode: generatedCode,
+        });
+      }
       const familyProfile = userData?.familyProfile || {};
       const legacyMedicalDocuments = Array.isArray(
         familyProfile.uploadedMedicalDocuments,
@@ -1198,6 +1207,8 @@ class SetupFamilyProfile extends React.Component {
           userName={form.householdName || "Family Account"}
           activeTab=''
           profileMenuActiveItem='setup-profile'
+          onViewProfile={() => ViewManager.goToViewProfile()}
+          onOpenSetup={() => ViewManager.goToFamilySetupProfile()}
           onLogout={this.props.onLogout}
           onTabChange={(tabKey) => {
             if (typeof this.props.onNavigateTab === "function") {

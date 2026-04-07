@@ -9,6 +9,7 @@ import ProfileService from "../../services/ProfileService";
 import AuthService from "../../services/AuthService";
 import { auth } from "../../firebase";
 import ResidentDashboardHeader from "../../components/ResidentDashboardHeader";
+import ViewManager from "../../services/ViewManager";
 
 /**
  * StepPill - Reusable step indicator component
@@ -1195,6 +1196,8 @@ class SetupProfile extends React.Component {
           userName={fullName || "Resident"}
           activeTab=''
           profileMenuActiveItem='setup-profile'
+          onViewProfile={() => ViewManager.goToViewProfile()}
+          onOpenSetup={() => ViewManager.goToSetupProfile()}
           onLogout={this.props.onLogout}
           onTabChange={(tabKey) => {
             if (typeof this.props.onNavigateTab === "function") {

@@ -982,7 +982,7 @@ class GovernmentDashboard extends React.Component {
         agencyName: userData.agencyName || "Local Government Unit",
         agencyType: userData.agencyType || "",
         userId: currentUser.uid,
-        loading: true,
+        loading: false,
       });
     } catch (error) {
       console.error("[GovernmentDashboard] Failed to load data:", error);

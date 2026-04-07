@@ -4,6 +4,7 @@ import ResidentDashboardHeader from "../../components/ResidentDashboardHeader";
 import AuthService from "../../services/AuthService";
 import { auth } from "../../firebase";
 import ViewFamilyProfile from "./ViewFamilyProfile";
+import ViewManager from "../../services/ViewManager";
 
 /**
  * ViewProfile - OOP Class-based Component
@@ -55,6 +56,8 @@ class ViewProfile extends React.Component {
             userName={headerUserName}
             activeTab=''
             profileMenuActiveItem='view-profile'
+            onViewProfile={() => ViewManager.goToViewProfile()}
+            onOpenSetup={() => ViewManager.goToSetupProfile()}
             onLogout={this.props.onLogout}
             onTabChange={(tabKey) => {
               if (typeof this.props.onNavigateTab === "function") {
@@ -78,6 +81,8 @@ class ViewProfile extends React.Component {
             userName={headerUserName}
             activeTab=''
             profileMenuActiveItem='view-profile'
+            onViewProfile={() => ViewManager.goToViewProfile()}
+            onOpenSetup={() => ViewManager.goToSetupProfile()}
             onLogout={this.props.onLogout}
             onTabChange={(tabKey) => {
               if (typeof this.props.onNavigateTab === "function") {
@@ -139,6 +144,8 @@ class ViewProfile extends React.Component {
           userName={headerUserName}
           activeTab=''
           profileMenuActiveItem='view-profile'
+          onViewProfile={() => ViewManager.goToViewProfile()}
+          onOpenSetup={() => ViewManager.goToSetupProfile()}
           onLogout={this.props.onLogout}
           onTabChange={(tabKey) => {
             if (typeof this.props.onNavigateTab === "function") {

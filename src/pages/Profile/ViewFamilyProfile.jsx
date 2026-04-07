@@ -1,6 +1,7 @@
 import React from "react";
 import { QRCodeSVG } from "qrcode.react";
 import ResidentDashboardHeader from "../../components/ResidentDashboardHeader";
+import ViewManager from "../../services/ViewManager";
 
 class ViewFamilyProfile extends React.Component {
   formatDateValue(rawValue) {
@@ -57,6 +58,8 @@ class ViewFamilyProfile extends React.Component {
           userName={displayName}
           activeTab=''
           profileMenuActiveItem='view-profile'
+          onViewProfile={() => ViewManager.goToViewProfile()}
+          onOpenSetup={() => ViewManager.goToFamilySetupProfile()}
           onLogout={this.props.onLogout}
           onTabChange={(tabKey) => {
             if (typeof this.props.onNavigateTab === "function") {

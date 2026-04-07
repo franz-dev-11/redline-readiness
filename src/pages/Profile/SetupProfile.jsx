@@ -1,4 +1,5 @@
 import React from "react";
+import { QRCodeSVG } from "qrcode.react";
 // Dynamically load html5-qrcode only on client
 let Html5Qrcode = null;
 if (typeof window !== "undefined") {
@@ -1134,9 +1135,6 @@ class SetupProfile extends React.Component {
     const age = this.getAge();
     const qrValue =
       profileQrCode || `RR-PENDING-${Date.now().toString().slice(-6)}`;
-    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-      qrValue,
-    )}`;
 
     return (
       <div className='bg-white border rounded p-4 h-fit'>
@@ -1169,10 +1167,12 @@ class SetupProfile extends React.Component {
         </div>
 
         <div className='bg-white border border-gray-200 rounded p-2 flex justify-center mb-2'>
-          <img
-            src={qrImageUrl}
-            alt='Unique Profile QR Code'
-            className='w-28 h-28'
+          <QRCodeSVG
+            value={qrValue}
+            size={112}
+            bgColor='#ffffff'
+            fgColor='#1e293b'
+            level='M'
           />
         </div>
 
@@ -1195,6 +1195,7 @@ class SetupProfile extends React.Component {
           userName={fullName || "Resident"}
           activeTab=''
           profileMenuActiveItem='setup-profile'
+          onLogout={this.props.onLogout}
           onTabChange={(tabKey) => {
             if (typeof this.props.onNavigateTab === "function") {
               this.props.onNavigateTab(tabKey);

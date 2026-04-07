@@ -20,6 +20,7 @@ class ViewManager {
       SETUP_PROFILE: "setup-profile",
       FAMILY_SETUP_PROFILE: "family-setup-profile",
       VIEW_PROFILE: "view-profile",
+      QR_SCAN: "qr-scan",
     };
 
     this.currentView = this.views.SELECTION;
@@ -152,6 +153,13 @@ class ViewManager {
    */
   goToViewProfile() {
     this.navigateTo(this.views.VIEW_PROFILE);
+  }
+
+  /**
+   * Go to QR scan page
+   */
+  goToQrScan() {
+    this.navigateTo(this.views.QR_SCAN);
   }
 
   /**

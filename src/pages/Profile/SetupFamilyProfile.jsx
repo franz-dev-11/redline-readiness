@@ -1198,6 +1198,7 @@ class SetupFamilyProfile extends React.Component {
           userName={form.householdName || "Family Account"}
           activeTab=''
           profileMenuActiveItem='setup-profile'
+          onLogout={this.props.onLogout}
           onTabChange={(tabKey) => {
             if (typeof this.props.onNavigateTab === "function") {
               this.props.onNavigateTab(tabKey);

@@ -52,6 +52,7 @@ import ResidentResources from "./ResidentResources";
 import ResidentContacts from "./ResidentContacts";
 import ResidentSectors from "./ResidentSectors";
 import EmergencyEventService from "../../services/EmergencyEventService";
+import AuthService from "../../services/AuthService";
 import {
   getAccessibilityContainerProps,
   normalizeAccessibilitySettings,
@@ -421,6 +422,19 @@ class ResidentDashboard extends React.Component {
       this.isArrivalConfirmedForCenter.bind(this);
     this.handleTabChange = this.handleTabChange.bind(this);
     this.renderActiveTabPage = this.renderActiveTabPage.bind(this);
+    this.handleLogout = this.handleLogout.bind(this);
+  }
+
+  async handleLogout() {
+    try {
+      await AuthService.logout();
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      if (typeof this.props.onLogout === "function") {
+        this.props.onLogout();
+      }
+    }
   }
 
   /**
@@ -2252,7 +2266,7 @@ class ResidentDashboard extends React.Component {
                         <FontAwesomeIcon icon={faPenToSquare} /> Setup Profile
                       </button>
                       <button
-                        onClick={this.props.onLogout}
+                        onClick={this.handleLogout}
                         className='w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 font-bold transition-colors'
                       >
                         <FontAwesomeIcon icon={faRightFromBracket} /> Sign Out
@@ -2285,7 +2299,7 @@ class ResidentDashboard extends React.Component {
                         <FontAwesomeIcon icon={faPenToSquare} /> Setup Profile
                       </button>
                       <button
-                        onClick={this.props.onLogout}
+                        onClick={this.handleLogout}
                         className='w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 font-bold transition-colors'
                       >
                         <FontAwesomeIcon icon={faRightFromBracket} /> Sign Out

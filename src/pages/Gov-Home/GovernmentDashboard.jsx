@@ -11,6 +11,7 @@ import {
   faUserShield,
   faSpinner,
   faBell,
+  faQrcode,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   Map as MapView,
@@ -37,6 +38,7 @@ import GovEvacuationPlansPage from "./GovEvacuationPlansPage";
 import GovResponseTeamsPage from "./GovResponseTeamsPage";
 import GovRegisteredUsersPage from "./GovRegisteredUsersPage";
 import GovReportsPage from "./GovReportsPage";
+import QrScanPage from "../QrScan/QrScanPage";
 import {
   getAccessibilityContainerProps,
   normalizeAccessibilitySettings,
@@ -2083,6 +2085,10 @@ class GovernmentDashboard extends React.Component {
             evacuationCenters={evacuationCenters}
           />
         );
+      case "scan-qr":
+        return (
+          <QrScanPage onBack={() => this.setActiveTab("dashboard")} />
+        );
       case "dashboard":
       default:
         return this.renderDashboard();
@@ -2155,6 +2161,12 @@ class GovernmentDashboard extends React.Component {
                 "Reports",
                 "reports",
                 activeTab === "reports",
+              )}
+              {this.renderHeaderTabItem(
+                faQrcode,
+                "Scan QR",
+                "scan-qr",
+                activeTab === "scan-qr",
               )}
             </>
           }

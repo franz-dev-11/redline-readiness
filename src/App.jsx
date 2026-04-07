@@ -14,7 +14,9 @@ import GovernmentDashboard from "./pages/Gov-Home/GovernmentDashboard.jsx";
 import SetupProfile from "./pages/Profile/SetupProfile";
 import SetupFamilyProfile from "./pages/Profile/SetupFamilyProfile";
 import ViewProfile from "./pages/Profile/ViewProfile";
+import QrScanPage from "./pages/QrScan/QrScanPage";
 import ViewManager from "./services/ViewManager";
+import AuthService from "./services/AuthService";
 import PageTransition from "./components/PageTransition";
 import VoiceAssistant from "./components/VoiceAssistant";
 
@@ -35,6 +37,17 @@ class App extends React.Component {
     this.handleViewChange = this.handleViewChange.bind(this);
     this.renderWithTransition = this.renderWithTransition.bind(this);
     this.renderView = this.renderView.bind(this);
+    this.handleLogout = this.handleLogout.bind(this);
+  }
+
+  async handleLogout() {
+    try {
+      await AuthService.logout();
+    } catch (e) {
+      console.error("Logout failed:", e);
+    } finally {
+      ViewManager.goToSelection();
+    }
   }
 
   renderWithTransition(viewKey, content) {
@@ -188,6 +201,7 @@ class App extends React.Component {
           "setup-profile",
           <SetupProfile
             onBack={() => ViewManager.goToHome()}
+            onLogout={this.handleLogout}
             onNavigateTab={(tabKey) => ViewManager.goToHomeWithTab(tabKey)}
           />,
         );
@@ -197,6 +211,7 @@ class App extends React.Component {
           "family-setup-profile",
           <SetupFamilyProfile
             onBack={() => ViewManager.goToHome()}
+            onLogout={this.handleLogout}
             onNavigateTab={(tabKey) => ViewManager.goToHomeWithTab(tabKey)}
           />,
         );
@@ -206,8 +221,15 @@ class App extends React.Component {
           "view-profile",
           <ViewProfile
             onBack={() => ViewManager.goToHome()}
+            onLogout={this.handleLogout}
             onNavigateTab={(tabKey) => ViewManager.goToHomeWithTab(tabKey)}
           />,
+        );
+
+      case "qr-scan":
+        return this.renderWithTransition(
+          "qr-scan",
+          <QrScanPage onBack={() => ViewManager.goToSelection()} />,
         );
 
       default:

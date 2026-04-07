@@ -1,4 +1,5 @@
 import React from "react";
+import { QRCodeSVG } from "qrcode.react";
 import ResidentDashboardHeader from "../../components/ResidentDashboardHeader";
 
 class ViewFamilyProfile extends React.Component {
@@ -56,6 +57,7 @@ class ViewFamilyProfile extends React.Component {
           userName={displayName}
           activeTab=''
           profileMenuActiveItem='view-profile'
+          onLogout={this.props.onLogout}
           onTabChange={(tabKey) => {
             if (typeof this.props.onNavigateTab === "function") {
               this.props.onNavigateTab(tabKey);
@@ -230,6 +232,59 @@ class ViewFamilyProfile extends React.Component {
                   <p className='text-sm text-slate-700'>{family.notes}</p>
                 </div>
               )}
+            </div>
+
+            {/* QR Code Card */}
+            <div className='lg:col-span-4'>
+              <div className='bg-white border rounded p-5'>
+                <p className='text-xs font-black text-slate-700 mb-4 uppercase tracking-wide'>Your Profile QR Code</p>
+                {profile?.profileQrCode ? (
+                  <>
+                    <div className='flex justify-center mb-3'>
+                      <div id='family-qr-wrapper' className='p-3 bg-white border border-gray-200 rounded-lg inline-block'>
+                        <QRCodeSVG
+                          value={profile.profileQrCode}
+                          size={176}
+                          bgColor='#ffffff'
+                          fgColor='#1e293b'
+                          level='M'
+                        />
+                      </div>
+                    </div>
+                    <p className='text-[10px] text-gray-400 text-center font-bold break-all mb-3'>
+                      {profile.profileQrCode}
+                    </p>
+                    <p className='text-[11px] text-slate-500 text-center'>
+                      Show this QR to first responders or LGU personnel to quickly access your emergency profile.
+                    </p>
+                    <div className='mt-4 flex justify-center'>
+                      <button
+                        onClick={() => {
+                          const wrapper = document.getElementById('family-qr-wrapper');
+                          const svg = wrapper && wrapper.querySelector('svg');
+                          if (!svg) return;
+                          const serializer = new XMLSerializer();
+                          const svgStr = serializer.serializeToString(svg);
+                          const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${displayName.replace(/\s+/g, '-')}-QR.svg`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                        className='px-4 py-2 bg-blue-700 text-white rounded text-xs font-bold hover:bg-blue-800 transition-colors'
+                      >
+                        Download QR
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className='text-xs text-gray-400 text-center py-6'>
+                    Complete your profile setup to generate your QR code.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
